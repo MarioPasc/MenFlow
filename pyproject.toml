@@ -44,9 +44,30 @@ dependencies = [
     "nibabel>=5.1",
     "SimpleITK>=2.3",
     "openpyxl>=3.1",
-    # DL stack
-    "torch>=2.2",
-    "monai>=1.3",
+    # DL stack — broad version ranges so the same pyproject works on a local
+    # workstation and inside an NGC-based Singularity container on Picasso.
+    # Driver-CUDA matching is an *install-time* concern, not a Python-level
+    # dependency. Install patterns:
+    #
+    #   • Local RTX 3060 (driver 535 / CUDA 12.2 → cu121 wheels):
+    #       pip install -e . --extra-index-url https://download.pytorch.org/whl/cu121
+    #
+    #   • Local RTX 4060 / similar (driver 545+ / CUDA 12.4):
+    #       pip install -e . --extra-index-url https://download.pytorch.org/whl/cu124
+    #
+    #   • Picasso A100 inside an NGC Singularity image (torch already provided):
+    #       pip install -e . --no-deps          # then install non-torch deps:
+    #       pip install h5py monai>=1.3 ...     # everything else
+    #     Or, inside an Apptainer recipe, simply add MenFlow as the last layer
+    #     without touching the NGC torch install:
+    #       %post
+    #         pip install --no-deps -e /opt/MenFlow
+    #
+    # Hard-pinning torch broke us once when pip silently upgraded an NGC-shipped
+    # torch and rebroke the cuDNN/NCCL linkage; do not re-tighten without a
+    # specific compatibility reason.
+    "torch>=2.2,<3",
+    "monai>=1.3,<2",
     # Metrics for E1
     "torchmetrics>=1.3",
     "lpips>=0.1.4",
@@ -91,6 +112,9 @@ Changelog = "https://github.com/MarioPasc/MenFlow/releases"
 
 [project.scripts]
 menflow-convert-brats-men = "menflow.data.conversors.brats_men:cli"
+menflow-convert-mengrowth = "menflow.data.conversors.mengrowth:cli"
+menflow-encode = "routines.encode.cli:main"
+menflow-decode = "routines.decode.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -111,8 +135,8 @@ markers = [
 extraPaths = ["src"]
 
 [tool.setuptools.packages.find]
-where = ["src"]
-include = ["menflow*"]
+where = ["src", "."]
+include = ["menflow*", "routines*"]
 
 [tool.setuptools.package-data]
 menflow = ["py.typed", "config/*.yaml", "config/**/*.yaml"]

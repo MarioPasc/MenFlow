@@ -1,0 +1,57 @@
+# MAISI-v2 encode routine — default config.
+#
+# Override this file or copy-and-modify per cohort. Paths must be absolute.
+
+source_h5: /media/mpascual/MeningD2/MENINGIOMAS/BRATS_MEN/h5/brats_men.h5
+output_h5: /media/mpascual/MeningD2/MENINGIOMAS/BRATS_MEN/h5/brats_men_maisi_latents.h5
+checkpoint: /media/mpascual/Sandisk2TB/research/menflow/checkpoints/NV-Generate-MR/models/autoencoder_v2.pt
+
+# null encodes every modality present in the source. Pass a list to subset.
+modalities: null
+
+# Stop after N scans (null = full cohort). Useful for smoke tests.
+max_scans: null
+
+# Storage cost per latent: fp16 ~halves disk use vs fp32. The latent posterior
+# mean is well-conditioned for fp16 round-trips on this architecture.
+latent_dtype: float16
+compression_level: 4
+log_level: INFO
+
+# Architecture must match the checkpoint exactly. The defaults below mirror the
+# rflow MR config from NV-Generate-CTMR; do not change unless the checkpoint
+# itself changes.
+model:
+  spatial_dims: 3
+  in_channels: 1
+  out_channels: 1
+  num_res_blocks: [2, 2, 2]
+  num_channels: [64, 128, 256]
+  attention_levels: [false, false, false]
+  latent_channels: 4
+  norm_num_groups: 32
+  norm_eps: 1.0e-6
+  with_encoder_nonlocal_attn: false
+  with_decoder_nonlocal_attn: false
+  use_checkpointing: false
+  use_convtranspose: false
+  num_splits: 4
+  dim_split: 1
+  norm_float16: true
+  save_mem: true
+
+inference:
+  device: cuda
+  dtype: float32                    # weights/activations dtype
+  deterministic: true               # encode-mean (reproducible)
+  pad_multiple: 16
+  pad_mode: reflect
+  # Resize each volume to this shape before encode. null = no resizing.
+  # The 12 GB RTX 3060 cannot fit native 240x240x155 whole-volume; downscale
+  # for smoke tests, run native on the A100s.
+  target_spatial_shape: [128, 128, 128]
+  intensity_lower_percentile: 0.0
+  intensity_upper_percentile: 99.5
+  intensity_b_min: 0.0
+  intensity_b_max: 1.0
+  intensity_clip: false
