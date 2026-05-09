@@ -1,9 +1,9 @@
 # MAISI-v2 decode — BraTS-MEN-2023 on Picasso A100.
 
-latent_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/BraTS_MEN/latents/brats_men_maisi_latents.h5
-output_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/BraTS_MEN/recon/brats_men_maisi_recon.h5
+latent_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/latents/brats_men_maisi_latents.h5
+output_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/recon/brats_men_maisi_recon.h5
 checkpoint: /mnt/home/users/tic_163_uma/mpascual/fscratch/checkpoints/NV-Generate-MR/models/autoencoder_v2.pt
-source_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/BraTS_MEN/h5/brats_men.h5
+source_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/brats_men.h5
 
 max_scans: null
 output_dtype: float32

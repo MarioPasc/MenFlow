@@ -3,8 +3,8 @@
 # Native shape (no spatial transform). All four modalities. fp16 inference.
 # The `slurm:` block is consumed by the launcher; the engine ignores it.
 
-source_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/BraTS_MEN/h5/brats_men.h5
-output_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/BraTS_MEN/latents/brats_men_maisi_latents.h5
+source_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/brats_men.h5
+output_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/latents/brats_men_maisi_latents.h5
 checkpoint: /mnt/home/users/tic_163_uma/mpascual/fscratch/checkpoints/NV-Generate-MR/models/autoencoder_v2.pt
 
 modalities: null   # encode all source modalities
