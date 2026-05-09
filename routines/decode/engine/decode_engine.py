@@ -329,16 +329,28 @@ def _initialise_output(
         compression_opts=compression_level,
     )
 
-    seg_data = _maybe_crop_seg(
-        src["segmentations"][:n_scans], geom=geom, op_target=output_spatial_shape
-    )
-    out.create_dataset(
+    # Stream-copy segmentations one scan at a time. Loading
+    # src["segmentations"][:n_scans] in one shot would peak at
+    # n_scans*H*W*D bytes (≈10 GB for BraTS-MEN); h5py reads + the gzip
+    # chunked write per row keeps peak RAM at a single segmentation (~9 MB).
+    seg_ds = out.create_dataset(
         "segmentations",
-        data=seg_data,
+        shape=(n_scans, H, W, D),
+        dtype="int8",
         chunks=(1, H, W, D),
         compression="gzip",
         compression_opts=compression_level,
     )
+    crop_slices = (
+        tuple(slice(o, o + t) for o, t in zip(geom.crop_offset, output_spatial_shape))
+        if geom.spatial_op == "crop"
+        else None
+    )
+    for i in range(n_scans):
+        s = src["segmentations"][i]
+        if crop_slices is not None:
+            s = s[crop_slices]
+        seg_ds[i] = s
 
     out.create_dataset("has_segmentation", data=src["has_segmentation"][:n_scans])
     out.create_dataset("scan_ids", data=src["scan_ids"][:n_scans], dtype=vlen)
@@ -365,19 +377,6 @@ def _initialise_output(
         for name, dataset in src["splits"].items():
             mask = dataset[:] < n_patients_kept
             splits_grp.create_dataset(name, data=dataset[:][mask].astype(np.int32))
-
-
-def _maybe_crop_seg(
-    seg: np.ndarray,
-    *,
-    geom: _LatentGeometry,
-    op_target: tuple[int, int, int],
-) -> np.ndarray:
-    """Center-crop segmentations to ``op_target`` if spatial_op == "crop"."""
-    if geom.spatial_op != "crop":
-        return seg
-    sl = (slice(None),) + tuple(slice(o, o + s) for o, s in zip(geom.crop_offset, op_target))
-    return seg[sl]
 
 
 # ---------------------------------------------------------------------------

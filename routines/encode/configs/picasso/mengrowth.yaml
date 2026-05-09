@@ -1,7 +1,7 @@
 # MAISI-v2 encode — MenGrowth on Picasso A100.
 
-source_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/MenGrowth/h5_format/MenGrowth_MenFlow.h5
-output_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/MenGrowth/latents/mengrowth_maisi_latents.h5
+source_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/MenGrowth_MenFlow.h5
+output_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/latents/mengrowth_maisi_latents.h5
 checkpoint: /mnt/home/users/tic_163_uma/mpascual/fscratch/checkpoints/NV-Generate-MR/models/autoencoder_v2.pt
 
 modalities: null

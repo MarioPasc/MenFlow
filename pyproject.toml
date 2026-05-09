@@ -115,7 +115,9 @@ menflow-convert-brats-men = "menflow.data.conversors.brats_men:cli"
 menflow-convert-mengrowth = "menflow.data.conversors.mengrowth:cli"
 menflow-encode = "routines.encode.cli:main"
 menflow-decode = "routines.decode.cli:main"
+menflow-compute-features = "routines.compute_features.cli:main"
 menflow-e1 = "experiments.maisi_autoencoder_patology_preservation.cli:main"
+menflow-e2-1 = "experiments.E2_1_recoverability.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

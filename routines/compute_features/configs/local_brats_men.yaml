@@ -1,0 +1,14 @@
+# Compute T1c features for the BraTS-MEN-2023 cross-sectional cohort, locally.
+
+latent_h5: /media/mpascual/MeningD2/MAISI_VAEGAN_LATENTS/brats_men_maisi_latents.h5
+source_h5: /media/mpascual/MeningD2/MENINGIOMAS/BRATS_MEN/h5/brats_men.h5
+output_h5: /media/mpascual/MeningD2/MAISI_VAEGAN_LATENTS/brats_men_features_t1c.h5
+
+modality: t1c
+mask_label_set: [1, 2, 3]
+random_region_seed: 0
+compute_z_full: false
+max_scans: null
+log_level: INFO
+device: cpu
+compression_level: 4

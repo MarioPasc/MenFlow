@@ -1,0 +1,15 @@
+# Compute pooled MAISI-v2 latent features (z_tumor, z_global, z_random) per scan.
+# Inputs: a self-describing latents H5 + the matching unified MenFlow source H5.
+
+latent_h5: null   # required override
+source_h5: null   # required override
+output_h5: null   # required override
+
+modality: t1c
+mask_label_set: [1, 2, 3]    # any non-zero meningioma label
+random_region_seed: 0
+compute_z_full: false        # toggle to true for E2.3/E2.4 (adds (N, C, H', W', D'))
+max_scans: null
+log_level: INFO
+device: cpu
+compression_level: 4

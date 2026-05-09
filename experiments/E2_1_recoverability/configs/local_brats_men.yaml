@@ -1,0 +1,22 @@
+# E2.1 on the locally-cached BraTS-MEN-2023 features.
+
+features_h5: /media/mpascual/MeningD2/MAISI_VAEGAN_LATENTS/brats_men_features_t1c.h5
+output_dir: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_1_recoverability
+
+mode: full
+subset_n: 50
+bootstrap_n: 1000
+n_splits: 5
+
+mlp_max_epochs: 200
+mlp_hidden: 256
+mlp_dropout: 0.1
+mlp_lr: 0.001
+mlp_weight_decay: 0.0001
+mlp_patience: 20
+mlp_batch_size: 64
+
+ridge_alphas: [0.1, 1.0, 10.0, 100.0]
+seed: 0
+device: cpu
+log_level: INFO
