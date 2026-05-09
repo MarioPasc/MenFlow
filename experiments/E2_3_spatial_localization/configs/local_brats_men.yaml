@@ -1,0 +1,9 @@
+features_h5: /media/mpascual/MeningD2/MAISI_VAEGAN_LATENTS/per_modality_features/brats_men_features_t1c.h5
+source_h5: /media/mpascual/MeningD2/MENINGIOMAS/BRATS_MEN/h5/brats_men.h5
+clinical_xlsx: /media/mpascual/MeningD2/MENINGIOMAS/BRATS_MEN/Meningioma_supplementary_clinical_data_and_imaging_parameters_for_training_and_validation_sets.xlsx
+output_dir: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_3_spatial_localization/per_modality/t1c
+laterality_cache_csv: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_2_identifiability/laterality_cache.csv
+n_boot: 1000
+seed: 0
+log_level: INFO
+synthetic: false

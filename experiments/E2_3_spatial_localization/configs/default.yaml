@@ -1,0 +1,38 @@
+# E2.3 spatial localization — documented defaults (not used directly).
+# Copy and modify for concrete invocations.
+
+# Path to the per-modality features H5 produced by routines/compute_features.
+# Must contain: z_tumor, z_global, z_random, log_volume, scan_ids, patient_ids,
+# mask_lat_present.
+features_h5: /path/to/brats_men_features_t1c.h5
+
+# Unified BraTS-MEN H5; used only for laterality computation when cache is absent.
+source_h5: /path/to/brats_men.h5
+
+# BraTS-MEN supplementary clinical xlsx for covariates (sex, age, grade).
+clinical_xlsx: /path/to/clinical.xlsx
+
+# Directory where result.json, bootstrap_scores.npz, and figures are written.
+output_dir: /path/to/output
+
+# Number of patient-level bootstrap replicates for 95% CI.
+n_boot: 1000
+
+# RNG seed for reproducibility.
+seed: 0
+
+# Python logging level.
+log_level: INFO
+
+# Optional path to CSV cache of laterality labels (keyed by scan_id).
+# If the file exists and covers all scan_ids, the segmentation read is skipped.
+# This can reuse E2.2's laterality_cache.csv.
+laterality_cache_csv: null
+
+# Set to true to run entirely in memory with synthetic data (no H5/xlsx reads).
+synthetic: false
+
+# Synthetic-mode parameters (ignored when synthetic: false).
+synthetic_n: 200        # number of synthetic scans
+synthetic_c: 4          # latent dimensionality
+synthetic_global_strength: 0.125  # coupling from tumor to global features

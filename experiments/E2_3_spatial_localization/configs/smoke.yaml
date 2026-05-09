@@ -1,0 +1,11 @@
+synthetic: true
+n_boot: 100
+seed: 0
+output_dir: /tmp/menflow_e2_3_smoke
+log_level: INFO
+synthetic_n: 200
+synthetic_c: 4
+synthetic_global_strength: 0.125
+features_h5: /tmp/_unused.h5
+source_h5: /tmp/_unused.h5
+clinical_xlsx: /tmp/_unused.xlsx
