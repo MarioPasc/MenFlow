@@ -1,5 +1,6 @@
 """Mask projection, pooling, and volume utilities for MAISI-v2 latents."""
 
+from menflow.latent_features.laterality import compute_laterality_from_mask
 from menflow.latent_features.mask import project_mask_to_latent
 from menflow.latent_features.pooling import (
     global_mean,
@@ -14,4 +15,5 @@ __all__ = [
     "global_mean",
     "random_region_mean",
     "voxel_count_to_log_volume_cm3",
+    "compute_laterality_from_mask",
 ]

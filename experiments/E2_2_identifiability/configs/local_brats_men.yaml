@@ -1,0 +1,16 @@
+# E2.2 on the locally-cached BraTS-MEN-2023 features (t1c modality).
+
+features_h5: /media/mpascual/MeningD2/MAISI_VAEGAN_LATENTS/per_modality_features/brats_men_features_t1c.h5
+source_h5: /media/mpascual/MeningD2/MENINGIOMAS/BRATS_MEN/h5/brats_men.h5
+clinical_xlsx: /media/mpascual/MeningD2/MENINGIOMAS/BRATS_MEN/Meningioma_supplementary_clinical_data_and_imaging_parameters_for_training_and_validation_sets.xlsx
+naive_direction_npz: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_1_recoverability/per_modality/t1c/direction.npz
+output_dir: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_2_identifiability/per_modality/t1c
+laterality_cache_parquet: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_2_identifiability/laterality_cache.csv
+
+n_boot: 200
+large_quantile: 0.8
+small_quantile: 0.2
+age_window: 5.0
+min_pairs: 30
+seed: 0
+log_level: INFO

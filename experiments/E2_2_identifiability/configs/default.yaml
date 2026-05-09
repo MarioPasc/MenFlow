@@ -1,0 +1,17 @@
+# E2.2 — Direction Identifiability default config. Override paths per-machine.
+# Not used directly — copy and fill in required paths.
+
+features_h5: null          # required: per-modality features H5 from routines/compute_features
+source_h5: null            # required: unified BraTS-MEN H5 (for segmentation laterality)
+clinical_xlsx: null        # required: BraTS-MEN supplementary clinical xlsx
+naive_direction_npz: null  # required: direction.npz from E2.1 per_modality/<mod>/
+output_dir: null           # required: where to write result.json + figures
+
+n_boot: 200
+large_quantile: 0.8
+small_quantile: 0.2
+age_window: 5.0
+min_pairs: 30
+seed: 0
+log_level: INFO
+laterality_cache_parquet: null  # optional: shared cache across modality runs

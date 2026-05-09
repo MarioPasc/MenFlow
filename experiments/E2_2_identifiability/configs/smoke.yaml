@@ -1,0 +1,17 @@
+# E2.2 smoke run: synthetic in-memory data. No external files needed.
+# The CLI detects features_h5: synthetic and synthesizes N=200, C=4 data.
+
+features_h5: synthetic
+source_h5: synthetic
+clinical_xlsx: synthetic
+naive_direction_npz: synthetic
+output_dir: /tmp/menflow_e2_2_smoke
+
+n_boot: 20
+large_quantile: 0.7
+small_quantile: 0.3
+age_window: 10.0
+min_pairs: 5
+seed: 42
+log_level: INFO
+laterality_cache_parquet: null
