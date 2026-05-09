@@ -7,8 +7,7 @@ otherwise :func:`MaisiAutoencoder.from_checkpoint` will refuse to load.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from typing import Sequence
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,19 +57,41 @@ MAISI_V2_MR_DEFAULTS: MaisiV2Config = MaisiV2Config()
 
 @dataclass(frozen=True, slots=True)
 class InferenceConfig:
-    """Inference-time controls (independent of model weights)."""
+    """Inference-time controls (independent of model weights).
+
+    Spatial preparation is governed by ``spatial_op``:
+
+    * ``"none"`` — feed source-shape volumes directly (Picasso default).
+    * ``"resize"`` — trilinear resize to ``target_spatial_shape``. Fast but
+      changes voxel volume, so any tumor-volume metric (E1 §5) becomes
+      inconsistent across scans of different source shapes.
+    * ``"crop"`` — center-crop to ``target_spatial_shape``. Preserves voxel
+      volume; only the brain region inside the crop is encoded. Recommended
+      for memory-constrained smoke tests on 12 GB GPUs.
+    """
 
     device: str = "cuda"
     dtype: str = "float32"  # weights+activation dtype; "float16" possible on Ampere+
     deterministic: bool = True  # encode-mean (z_mu) instead of sampling
     pad_multiple: int = 16  # pad spatial dims to a multiple of this before encode
     pad_mode: str = "reflect"
-    target_spatial_shape: tuple[int, int, int] | None = None  # if set, Resize input
+    spatial_op: str = "none"  # "none" | "resize" | "crop"
+    target_spatial_shape: tuple[int, int, int] | None = None
     intensity_lower_percentile: float = 0.0
     intensity_upper_percentile: float = 99.5
     intensity_b_min: float = 0.0
     intensity_b_max: float = 1.0
     intensity_clip: bool = False
+
+    def __post_init__(self) -> None:
+        if self.spatial_op not in {"none", "resize", "crop"}:
+            raise ValueError(
+                f"spatial_op must be one of {{none,resize,crop}}; got {self.spatial_op!r}"
+            )
+        if self.spatial_op != "none" and self.target_spatial_shape is None:
+            raise ValueError(
+                f"spatial_op={self.spatial_op!r} requires target_spatial_shape to be set"
+            )
 
     def as_dict(self) -> dict:
         return asdict(self)

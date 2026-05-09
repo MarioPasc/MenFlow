@@ -115,6 +115,7 @@ menflow-convert-brats-men = "menflow.data.conversors.brats_men:cli"
 menflow-convert-mengrowth = "menflow.data.conversors.mengrowth:cli"
 menflow-encode = "routines.encode.cli:main"
 menflow-decode = "routines.decode.cli:main"
+menflow-e1 = "experiments.maisi_autoencoder_patology_preservation.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -136,7 +137,7 @@ extraPaths = ["src"]
 
 [tool.setuptools.packages.find]
 where = ["src", "."]
-include = ["menflow*", "routines*"]
+include = ["menflow*", "routines*", "experiments*"]
 
 [tool.setuptools.package-data]
 menflow = ["py.typed", "config/*.yaml", "config/**/*.yaml"]

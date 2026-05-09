@@ -1,0 +1,28 @@
+# E1 analysis — BraTS-MEN-2023 on Picasso.
+#
+# This config is consumed by the analysis CLI; the orchestrator launcher reads
+# `slurm:` from this same file when submitting the analysis-step sbatch job.
+
+source_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/BraTS_MEN/h5/brats_men.h5
+recon_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/BraTS_MEN/recon/brats_men_maisi_recon.h5
+output_dir: /mnt/home/users/tic_163_uma/mpascual/fscratch/results/menflow/E1_bratsmen
+
+max_scans: null
+device: cpu
+n_bootstrap: 500
+seed: 0
+require_segmentation: true
+log_level: INFO
+stratification_volume: volume_wt_cm3
+
+slurm:
+  job_name: menflow_e1_analysis_bratsmen
+  partition: cal
+  constraint: cal
+  time: "0-02:00:00"
+  cpus_per_task: 8
+  mem: 32G
+  gres: ""
+  conda_env: menflow
+  repo_dir: /mnt/home/users/tic_163_uma/mpascual/fscratch/repos/MenFlow
+  logs_dir: /mnt/home/users/tic_163_uma/mpascual/execs/menflow/logs

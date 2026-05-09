@@ -1,12 +1,19 @@
-# Smoke-test config: 1 scan, 1 modality, downscaled to 128^3.
+# Smoke-test config: 1 scan, 1 modality, center-cropped to 96^3.
 # Target hardware: RTX 3060 12 GB.
+#
+# Crop (not resize) preserves the 1 mm^3 voxel volume so any tumor-volume
+# computation in the experiment analysis stays valid; the brain region inside
+# the crop is what the encoder/decoder round-trips.
 
 source_h5: /media/mpascual/MeningD2/MENINGIOMAS/BRATS_MEN/h5/brats_men.h5
 output_h5: /tmp/menflow_smoke_latents.h5
 checkpoint: /media/mpascual/Sandisk2TB/research/menflow/checkpoints/NV-Generate-MR/models/autoencoder_v2.pt
 
 modalities: [t1c]
-max_scans: 1
+# 5 scans — the very first BraTS-MEN scan is from the validation subset (no
+# segmentation), so we encode a few extras to ensure the analysis has at least
+# one annotated case to evaluate.
+max_scans: 5
 
 latent_dtype: float32
 compression_level: 4
@@ -41,7 +48,8 @@ inference:
   deterministic: true
   pad_multiple: 16
   pad_mode: reflect
-  target_spatial_shape: [128, 128, 128]
+  spatial_op: crop
+  target_spatial_shape: [96, 96, 96]
   intensity_lower_percentile: 0.0
   intensity_upper_percentile: 99.5
   intensity_b_min: 0.0

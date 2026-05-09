@@ -1,0 +1,59 @@
+# MAISI-v2 encode — BraTS-MEN-2023 on Picasso A100.
+#
+# Native shape (no spatial transform). All four modalities. fp16 inference.
+# The `slurm:` block is consumed by the launcher; the engine ignores it.
+
+source_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/BraTS_MEN/h5/brats_men.h5
+output_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/BraTS_MEN/latents/brats_men_maisi_latents.h5
+checkpoint: /mnt/home/users/tic_163_uma/mpascual/fscratch/checkpoints/NV-Generate-MR/models/autoencoder_v2.pt
+
+modalities: null   # encode all source modalities
+max_scans: null
+latent_dtype: float16
+compression_level: 4
+log_level: INFO
+
+model:
+  spatial_dims: 3
+  in_channels: 1
+  out_channels: 1
+  num_res_blocks: [2, 2, 2]
+  num_channels: [64, 128, 256]
+  attention_levels: [false, false, false]
+  latent_channels: 4
+  norm_num_groups: 32
+  norm_eps: 1.0e-6
+  with_encoder_nonlocal_attn: false
+  with_decoder_nonlocal_attn: false
+  use_checkpointing: false
+  use_convtranspose: false
+  num_splits: 4
+  dim_split: 1
+  norm_float16: true
+  save_mem: true
+
+inference:
+  device: cuda
+  dtype: float16
+  deterministic: true
+  pad_multiple: 16
+  pad_mode: reflect
+  spatial_op: none
+  target_spatial_shape: null
+  intensity_lower_percentile: 0.0
+  intensity_upper_percentile: 99.5
+  intensity_b_min: 0.0
+  intensity_b_max: 1.0
+  intensity_clip: false
+
+slurm:
+  job_name: menflow_encode_bratsmen
+  partition: dgx
+  constraint: dgx
+  time: "0-04:00:00"
+  cpus_per_task: 16
+  mem: 64G
+  gres: "gpu:1"
+  conda_env: menflow
+  repo_dir: /mnt/home/users/tic_163_uma/mpascual/fscratch/repos/MenFlow
+  logs_dir: /mnt/home/users/tic_163_uma/mpascual/execs/menflow/logs

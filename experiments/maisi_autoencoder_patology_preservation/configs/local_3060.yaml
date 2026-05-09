@@ -1,0 +1,16 @@
+# E1 analysis — local 3060 smoke test.
+#
+# Pairs the smoke encode+decode outputs with the same source H5; metrics are
+# computed on the (cropped) working region only.
+
+source_h5: /media/mpascual/MeningD2/MENINGIOMAS/BRATS_MEN/h5/brats_men.h5
+recon_h5: /tmp/menflow_smoke_recon.h5
+output_dir: /tmp/menflow_smoke_e1
+
+max_scans: null
+device: cpu
+n_bootstrap: 100
+seed: 0
+require_segmentation: true
+log_level: INFO
+stratification_volume: volume_wt_cm3
