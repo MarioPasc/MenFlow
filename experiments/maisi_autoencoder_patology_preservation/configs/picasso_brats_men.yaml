@@ -3,9 +3,9 @@
 # This config is consumed by the analysis CLI; the orchestrator launcher reads
 # `slurm:` from this same file when submitting the analysis-step sbatch job.
 
-source_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/BraTS_MEN/h5/brats_men.h5
-recon_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/BraTS_MEN/recon/brats_men_maisi_recon.h5
-output_dir: /mnt/home/users/tic_163_uma/mpascual/fscratch/results/menflow/E1_bratsmen
+source_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/brats_men.h5
+recon_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/recon/brats_men_maisi_recon.h5
+output_dir: /mnt/home/users/tic_163_uma/mpascual/execs/menflow/E1_bratsmen
 
 max_scans: null
 device: cpu
