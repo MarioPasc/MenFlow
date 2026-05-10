@@ -81,8 +81,10 @@ KFOLD=$(yaml_top kfold 5)
 BASE_RUN_NAME=$(yaml_top run_name "run")
 OUTPUT_DIR=$(yaml_top output_dir "${HOME}/runs")
 
-PARTITION=$(yaml_sub slurm partition "dgx2q")
-QOS=$(yaml_sub slurm qos "dgx2q")
+# Picasso conventions (per the picasso-sbatch skill): A100 nodes are selected
+# via --constraint=dgx; --partition is NOT used. Do not re-introduce a
+# partition flag — recent Picasso versions reject named partitions like
+# `dgx2q` outright.
 CONSTRAINT=$(yaml_sub slurm constraint "dgx")
 GRES=$(yaml_sub slurm gres "gpu:1")
 CPUS=$(yaml_sub slurm cpus_per_task "8")
@@ -107,7 +109,6 @@ echo "Base config:   ${BASE_CONFIG}"
 echo "kfold:         ${KFOLD}"
 echo "Base run name: ${BASE_RUN_NAME}"
 echo "Output dir:    ${OUTPUT_DIR}"
-echo "Partition:     ${PARTITION}  QoS: ${QOS}"
 echo "Constraint:    ${CONSTRAINT}  gres: ${GRES}"
 echo "CPUs: ${CPUS}  Mem: ${MEM}  Time: ${TIME_LIMIT}"
 echo "Logs:          ${LOGS_BASE}/<RUN_NAME>_<JOBID>.{out,err}"
@@ -130,10 +131,9 @@ for FOLD in $(seq 0 $((KFOLD - 1))); do
     SBATCH_ARGS=(
         --parsable
         --job-name="${JOB_NAME}"
-        --partition="${PARTITION}"
-        --qos="${QOS}"
         --constraint="${CONSTRAINT}"
         --gres="${GRES}"
+        --ntasks=1
         --cpus-per-task="${CPUS}"
         --mem="${MEM}"
         --time="${TIME_LIMIT}"

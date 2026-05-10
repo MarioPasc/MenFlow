@@ -64,11 +64,12 @@ sampling:
   cfg_scale: 4.0
 
 # slurm: block consumed by launcher_finetune_fm_volume.sh; ignored by the engine.
+# Picasso convention: A100 nodes are selected via `--constraint=dgx` only —
+# partitions/QoS are not used (recent Picasso versions reject named partitions).
 slurm:
-  partition: dgx2q
-  qos: dgx2q
   constraint: dgx
   gres: "gpu:1"
   cpus_per_task: 8
   mem: "64G"
   time: "48:00:00"
+  conda_env: menflow
