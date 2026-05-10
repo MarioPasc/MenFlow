@@ -68,6 +68,14 @@ dependencies = [
     # specific compatibility reason.
     "torch>=2.2,<3",
     "monai>=1.3,<2",
+    # Parameter-efficient finetuning. peft.inject_adapter_in_model patches
+    # target Linear submodules in place with LoRA, preserving the host model's
+    # forward signature — required by routines/finetune_fm_volume. The upper
+    # cap on peft and the transformers pin are driven by torch 2.4 / cu121 on
+    # the local 3060; peft 0.16+ pulls a transformers that uses the
+    # `torch.library.custom_op` API tightened in torch 2.5.
+    "peft>=0.11,<0.16",
+    "transformers>=4.40,<5",
     # Metrics for E1
     "torchmetrics>=1.3",
     "lpips>=0.1.4",
@@ -111,6 +119,7 @@ Repository = "https://github.com/MarioPasc/MenFlow"
 Changelog = "https://github.com/MarioPasc/MenFlow/releases"
 
 [project.scripts]
+menflow-build = "menflow.data.build:cli"
 menflow-convert-brats-men = "menflow.data.conversors.brats_men:cli"
 menflow-convert-mengrowth = "menflow.data.conversors.mengrowth:cli"
 menflow-encode = "routines.encode.cli:main"
@@ -123,6 +132,8 @@ menflow-e2-3 = "experiments.E2_3_spatial_localization.cli:main"
 menflow-steer-decode = "routines.steer_decode.cli:main"
 menflow-e2-4 = "experiments.E2_4_causal_steering.cli:main"
 menflow-segment-brats = "routines.segment_brats.cli:main"
+menflow-finetune-fm-volume = "routines.finetune_fm_volume.cli:main"
+menflow-migrate-e3-splits = "menflow.data.migrate_e3_splits:cli"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

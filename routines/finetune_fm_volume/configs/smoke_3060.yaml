@@ -1,0 +1,56 @@
+# Smoke config — 200-step plumbing/identity-at-init test on the local RTX 3060 12 GB.
+#
+# Paths assume the local workstation layout; override before running on a
+# different machine. NOT for full Stage-1 calibration — that runs on Picasso.
+
+fm_checkpoint: /media/mpascual/Sandisk2TB/research/menflow/checkpoints/NV-Generate-MR/models/diff_unet_3d_rflow-mr.pt
+latent_h5: /media/mpascual/MeningD2/MAISI_VAEGAN_LATENTS/BRATS_MEN/brats_men_maisi_latents.h5
+features_h5_dir: /media/mpascual/MeningD2/MAISI_VAEGAN_LATENTS/BRATS_MEN/per_modality_features
+output_dir: /media/mpascual/Sandisk2TB/research/menflow/runs/finetune_fm_volume
+
+run_name: smoke_3060
+modalities: [t1c]
+log_level: INFO
+
+# K-fold split selection (canonical layout produced by every converter and
+# the migration script). kfold=1 fold=0 reproduces the previous holdout.
+# train/val/test_split may be set to override the derived HDF5 paths.
+kfold: 1
+fold: 0
+
+train:
+  batch_size: 1
+  grad_accum: 4
+  max_steps: 100
+  lr: 1.0e-4
+  weight_decay: 1.0e-2
+  warmup_steps: 50
+  p_uncond: 0.1
+  grad_clip: 1.0
+  ema_decay: 0.9999
+  seed: 42
+  num_workers: 2
+  val_interval: 50
+  sample_interval: 100
+  save_interval: 100
+  autocast_dtype: float16
+  activation_checkpointing: false
+
+lora:
+  rank: 8
+  alpha: 8.0
+  dropout: 0.0
+  target_modules: [to_q, to_k, to_v, out_proj]
+  bias: none
+
+conditioner:
+  fourier_features: 32
+  fourier_sigma: 1.0
+  embed_dim: 256
+  hidden_dim: 256
+
+sampling:
+  n_anchors: 2
+  log_v_grid: [-2.0, 0.0, 2.0]
+  n_ode_steps: 10
+  cfg_scale: 4.0

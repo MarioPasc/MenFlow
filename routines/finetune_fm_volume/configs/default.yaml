@@ -1,0 +1,54 @@
+# Volume-conditional MAISI-v2 FM finetune — canonical (A100) config.
+#
+# Override via copy + edit per run. Paths must be absolute.
+
+fm_checkpoint: /media/mpascual/Sandisk2TB/research/menflow/checkpoints/NV-Generate-MR/models/diff_unet_3d_rflow-mr.pt
+latent_h5: /media/mpascual/MeningD2/MAISI_VAEGAN_LATENTS/BRATS_MEN/brats_men_maisi_latents.h5
+features_h5_dir: /media/mpascual/MeningD2/MAISI_VAEGAN_LATENTS/BRATS_MEN/per_modality_features
+output_dir: /media/mpascual/Sandisk2TB/research/menflow/runs/finetune_fm_volume
+
+run_name: full_a100
+modalities: [t1c]
+log_level: INFO
+
+kfold: 1
+fold: 0
+
+train:
+  batch_size: 4
+  grad_accum: 4
+  max_steps: 50000
+  lr: 1.0e-4
+  weight_decay: 1.0e-2
+  warmup_steps: 1000
+  p_uncond: 0.1
+  grad_clip: 1.0
+  ema_decay: 0.9999
+  seed: 42
+  num_workers: 4
+  val_interval: 2500
+  sample_interval: 10000
+  save_interval: 5000
+  autocast_dtype: bfloat16
+  activation_checkpointing: false
+
+lora:
+  rank: 8
+  alpha: 8.0
+  dropout: 0.0
+  # peft suffix-matches against module names; these target the four projection
+  # linears in every MAISI attention block.
+  target_modules: [to_q, to_k, to_v, out_proj]
+  bias: none
+
+conditioner:
+  fourier_features: 32
+  fourier_sigma: 1.0
+  embed_dim: 256
+  hidden_dim: 256
+
+sampling:
+  n_anchors: 100
+  log_v_grid: [-3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0]
+  n_ode_steps: 30
+  cfg_scale: 4.0

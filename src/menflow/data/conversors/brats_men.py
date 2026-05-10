@@ -18,9 +18,25 @@ other consumer) applies its own MAISI-v2-specific preprocessing on read.
 Cohort fusion
 -------------
 
-Training (n≈878) and validation (n≈141) subjects are concatenated into a single
-file. The ``has_segmentation`` flag and the ``splits/{train, val}`` index arrays
-let the consumer select either subset.
+Training (n≈1000) and validation (n≈141) subjects are concatenated into a
+single file; the ``metadata/subset`` field distinguishes ``"train"`` (annotated)
+from ``"val"`` (unannotated) on a per-scan basis. ``has_segmentation`` mirrors
+the same partition.
+
+Splits
+------
+
+The converter emits **only** the patient-grouped, log-volume-stratified splits
+required by E3.1 §4.2 — ``splits/e3_train`` (≈80 %), ``splits/e3_val`` (≈10 %)
+and ``splits/e3_test`` (≈10 %). All three are computed from the annotated
+training cohort exclusively; the unannotated validation cohort is **not**
+present in any split. Stratification is by E3.1 volume bin (5 quantiles of log
+tumor volume aggregated to patient level) using
+``sklearn.model_selection.StratifiedKFold`` with a fixed seed.
+
+The legacy ``splits/{train, val}`` (BraTS challenge cohort partition) is **no
+longer emitted**. Files produced before this change must be migrated via
+``menflow.data.migrate_e3_splits`` before the e3_* splits are usable downstream.
 
 Optional clinical metadata (grade, age, sex) is parsed from ``*.xlsx`` files
 adjacent to the cohort root; missing values are encoded as ``-1`` / ``NaN`` /
@@ -32,13 +48,17 @@ from __future__ import annotations
 import argparse
 import logging
 import re
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
 
 import nibabel as nib
 import numpy as np
 
 from menflow.data.h5_converter import ConversionError, H5Converter, ScanData, ScanRecord
+from menflow.data.kfold_splits import (
+    KFoldLayout,
+    compute_log_volume_voxels,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,13 +96,28 @@ class BraTSMENConverter(H5Converter):
         on construction and joined into per-scan metadata fields.
     """
 
-    def __init__(self, metadata_xlsx: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        metadata_xlsx: str | Path | None = None,
+        *,
+        kfold_k_values: tuple[int, ...] = (1, 3, 5, 10),
+        kfold_test_pct: float = 0.1,
+        kfold_seed: int = 42,
+        kfold_n_strata: int = 5,
+    ) -> None:
         self._metadata_xlsx = Path(metadata_xlsx) if metadata_xlsx is not None else None
         self._metadata_table: dict[str, dict[str, object]] = {}
         if self._metadata_xlsx is not None:
             self._metadata_table = _load_metadata_xlsx(self._metadata_xlsx)
         self._train_pids: set[str] = set()
         self._val_pids: set[str] = set()
+        # Per-scan log-volume cache, populated in load_scan and consumed in
+        # build_kfold_splits to drive patient-level stratification.
+        self._scan_log_v: dict[str, float] = {}
+        self._kfold_k_values = tuple(int(k) for k in kfold_k_values)
+        self._kfold_test_pct = float(kfold_test_pct)
+        self._kfold_seed = int(kfold_seed)
+        self._kfold_n_strata = int(kfold_n_strata)
 
     # ----- Static schema metadata -----
 
@@ -191,8 +226,14 @@ class BraTSMENConverter(H5Converter):
             seg_arr = _load_nifti(paths["seg"]).astype(np.int8, copy=False)
             seg_arr = _validate_labels(seg_arr, record.scan_id)
             seg = seg_arr
+            self._scan_log_v[record.scan_id] = compute_log_volume_voxels(
+                seg, label_set=tuple(k for k in _LABEL_MAP if k != 0)
+            )
         else:
             seg = None
+            # Sentinel matches routines/compute_features convention so the
+            # build_splits filter `log_v > -6.0` excludes the unannotated cohort.
+            self._scan_log_v[record.scan_id] = float(np.log(1e-3))
 
         meta = self._metadata_for(record.patient_id)
         meta["subset"] = subset
@@ -201,21 +242,29 @@ class BraTSMENConverter(H5Converter):
 
     # ----- Splits -----
 
-    def build_splits(
+    def build_kfold_splits(
         self, records: list[ScanRecord], patient_list: list[str]
-    ) -> dict[str, np.ndarray]:
-        """Two index arrays into ``patient_list``: train and val."""
-        train_idx: list[int] = []
-        val_idx: list[int] = []
-        for i, pid in enumerate(patient_list):
-            if pid in self._train_pids:
-                train_idx.append(i)
-            if pid in self._val_pids:
-                val_idx.append(i)
-        return {
-            "train": np.asarray(train_idx, dtype=np.int32),
-            "val": np.asarray(val_idx, dtype=np.int32),
-        }
+    ) -> dict[int, KFoldLayout]:
+        """Patient-level, log-volume-stratified k-fold splits.
+
+        Produces ``splits/kfold/k{N}/`` for every ``N`` in
+        ``self._kfold_k_values``. The unannotated BraTS challenge validation
+        cohort (``subset == "val"``) is excluded from all splits.
+        """
+        # Local import to dodge isort/formatter stripping a top-level alias
+        # that would otherwise clash with the method name.
+        from menflow.data.kfold_splits import build_kfold_splits as helper
+
+        return helper(
+            patient_list=patient_list,
+            scan_to_patient=[(r.scan_id, r.patient_id) for r in records],
+            scan_log_v=dict(self._scan_log_v),
+            scan_subset={r.scan_id: r.extras["subset"] for r in records},
+            k_values=self._kfold_k_values,
+            test_pct=self._kfold_test_pct,
+            seed=self._kfold_seed,
+            n_strata=self._kfold_n_strata,
+        )
 
     # ----- Internals -----
 

@@ -66,6 +66,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import logging
+import warnings
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -76,6 +77,15 @@ logger = logging.getLogger(__name__)
 
 
 LATENT_SCHEMA_VERSION = "0.2-provisional"
+
+
+# Canonical training-time splits the latent H5 is expected to expose. Driven by
+# the E3.1 spec (§4.2): patient-grouped, log-volume-stratified train/val/test.
+# Any other split name on the source H5 is dropped by the encode engine, and
+# legacy ``train``/``val`` (BraTS challenge cohort partition) trigger a
+# deprecation warning if written here.
+EXPECTED_E3_SPLITS: tuple[str, ...] = ("e3_train", "e3_val", "e3_test")
+LEGACY_SPLIT_NAMES: tuple[str, ...] = ("train", "val")
 
 
 class LatentH5Writer:
@@ -230,7 +240,24 @@ class LatentH5Writer:
         f["intensity_upper"][index] = np.asarray(intensity_upper, dtype=np.float32)
 
     def write_split(self, name: str, indices: np.ndarray) -> None:
-        """Persist a patient-level index split (mirrors source/splits/<name>)."""
+        """Persist a patient-level index split (mirrors source/splits/<name>).
+
+        Names in :data:`LEGACY_SPLIT_NAMES` (``train``, ``val``) emit a
+        :class:`DeprecationWarning` because they correspond to the BraTS
+        challenge cohort partition rather than the patient-grouped, log-volume
+        stratified training splits required by E3.1 §4.2 (see
+        :data:`EXPECTED_E3_SPLITS`). They are still written for backwards
+        compatibility, but new code must switch to the e3_* names.
+        """
+        if name in LEGACY_SPLIT_NAMES:
+            warnings.warn(
+                f"latent H5 split name {name!r} is deprecated; use one of "
+                f"{EXPECTED_E3_SPLITS} instead. The legacy names refer to the "
+                "BraTS challenge train/val cohorts, of which the val cohort "
+                "is unannotated and unsuitable for FM finetuning.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         if self._splits_grp is None:
             self._splits_grp = self._file.create_group("splits")
         self._splits_grp.create_dataset(name, data=np.asarray(indices, dtype=np.int32))

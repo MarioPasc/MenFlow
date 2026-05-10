@@ -53,49 +53,61 @@ def synthetic_mengrowth(tmp_path_factory: pytest.TempPathFactory) -> Path:
     pat2 = root / "MenGrowth-0002"
     for tp in range(3):
         seg = np.zeros(_SHAPE, dtype=np.int16)
-        seg[120 + tp : 125 + tp, 120 : 130, 80 : 85] = 2
-        seg[125 + tp : 130 + tp, 125 : 135, 85 : 90] = 3
+        seg[120 + tp : 125 + tp, 120:130, 80:85] = 2
+        seg[125 + tp : 130 + tp, 125:135, 85:90] = 3
         _write_synthetic_scan(pat2 / f"MenGrowth-0002-{tp:03d}", seg=seg, rng=rng)
+
+    # Patients 0003..0006: single timepoint each, all annotated. Needed so the
+    # 6-patient cohort can support a 3-fold e3_* split without falling under
+    # the StratifiedKFold per-class minimum.
+    for pid in range(3, 7):
+        pat = root / f"MenGrowth-{pid:04d}"
+        seg = np.zeros(_SHAPE, dtype=np.int16)
+        seg[100 + pid : 110 + pid, 100:110, 70:75] = 1
+        seg[110 + pid : 120 + pid, 110:120, 75:80] = 3
+        _write_synthetic_scan(pat / f"MenGrowth-{pid:04d}-000", seg=seg, rng=rng)
 
     return root
 
 
+def _build_converter() -> MenGrowthConverter:
+    """Use a (1, 3) k-value layout sized for the 6-patient synthetic cohort."""
+    return MenGrowthConverter(
+        kfold_k_values=(1, 3), kfold_test_pct=0.2, kfold_seed=0, kfold_n_strata=2
+    )
+
+
 @pytest.mark.integration
-def test_mengrowth_writes_schema_compliant_h5(
-    synthetic_mengrowth: Path, tmp_path: Path
-) -> None:
+def test_mengrowth_writes_schema_compliant_h5(synthetic_mengrowth: Path, tmp_path: Path) -> None:
     output = tmp_path / "mengrowth.h5"
-    MenGrowthConverter().convert({"root": synthetic_mengrowth}, output)
+    _build_converter().convert({"root": synthetic_mengrowth}, output)
     violations = validate_h5(output)
     assert violations == [], "\n".join(str(v) for v in violations)
 
 
 @pytest.mark.integration
-def test_mengrowth_csr_layout_is_correct(
-    synthetic_mengrowth: Path, tmp_path: Path
-) -> None:
+def test_mengrowth_csr_layout_is_correct(synthetic_mengrowth: Path, tmp_path: Path) -> None:
     output = tmp_path / "mengrowth.h5"
-    MenGrowthConverter().convert({"root": synthetic_mengrowth}, output)
+    _build_converter().convert({"root": synthetic_mengrowth}, output)
 
     with h5py.File(output, "r") as f:
         assert f.attrs["dataset_name"] == "MenGrowth"
         assert f.attrs["dataset_type"] == "longitudinal"
-        assert int(f.attrs["n_scans"]) == 5
-        assert int(f.attrs["n_patients"]) == 2
+        # 2 multi-tp + 4 single-tp = 9 scans across 6 patients
+        assert int(f.attrs["n_scans"]) == 9
+        assert int(f.attrs["n_patients"]) == 6
 
         offsets = f["longitudinal/patient_offsets"][:]
-        # Patient 0001 owns scans [0,1]; patient 0002 owns [2,3,4].
-        assert offsets.tolist() == [0, 2, 5]
+        assert offsets.tolist() == [0, 2, 5, 6, 7, 8, 9]
 
-        plist = [s.decode() if isinstance(s, bytes) else s for s in f["longitudinal/patient_list"][:]]
-        assert plist == ["MenGrowth-0001", "MenGrowth-0002"]
-
-        tp = f["timepoint_idx"][:].tolist()
-        assert tp == [0, 1, 0, 1, 2]
+        plist = [
+            s.decode() if isinstance(s, bytes) else s for s in f["longitudinal/patient_list"][:]
+        ]
+        assert plist == [f"MenGrowth-{i:04d}" for i in range(1, 7)]
 
         empty = f["metadata/empty_seg"][:]
-        # Only the second scan of patient 0001 is empty.
-        assert empty.tolist() == [False, True, False, False, False]
+        # Only the second scan of patient 0001 is empty; everything else has tumor.
+        assert empty.tolist() == [False, True, False, False, False, False, False, False, False]
 
         label_map = json.loads(f.attrs["label_map"])
         assert label_map["1"] == "non_enhancing_tumor_core"
@@ -103,3 +115,19 @@ def test_mengrowth_csr_layout_is_correct(
         assert label_map["3"] == "enhancing_tumor"
 
         assert bool(f.attrs["has_segmentation_any"]) is True
+
+        # K-fold splits: every k must cover all 6 patients; legacy names absent.
+        for k in (1, 3):
+            test = list(f[f"splits/kfold/k{k}/test"][:])
+            n_folds = int(f[f"splits/kfold/k{k}"].attrs["n_folds"])
+            assert n_folds == k
+            union = set(test)
+            for i in range(k):
+                tr = list(f[f"splits/kfold/k{k}/fold_{i}/train"][:])
+                va = list(f[f"splits/kfold/k{k}/fold_{i}/val"][:])
+                assert not (set(tr) & set(va))
+                union |= set(tr) | set(va)
+            assert len(union) == 6
+        assert "train" not in f["splits"]
+        assert "val" not in f["splits"]
+        assert "e3_train" not in f["splits"]

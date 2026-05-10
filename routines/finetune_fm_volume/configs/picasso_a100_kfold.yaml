@@ -1,0 +1,74 @@
+# Picasso A100 (40 GB) — full schedule, k-fold cross-validation.
+#
+# The launcher fires one sbatch per fold: choosing kfold=5 produces 5 jobs that
+# share the same held-out test set but each trains on a different (train, val)
+# fold. The active fold is overridden per-launch via `--fold N` on the CLI.
+#
+# Paths point at the Picasso fscratch layout. Adjust `output_dir` per branch
+# / experiment name; the engine creates a timestamped sub-directory under it.
+
+fm_checkpoint: /mnt/home/users/tic_163_uma/mpascual/fscratch/checkpoints/NV-Generate-MR/models/diff_unet_3d_rflow-mr.pt
+ae_checkpoint: /mnt/home/users/tic_163_uma/mpascual/fscratch/checkpoints/NV-Generate-MR/models/autoencoder_v2.pt
+latent_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/latents/brats_men_maisi_latents.h5
+features_h5_dir: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/latents/per_modality_features
+source_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/brats_men.h5
+output_dir: /mnt/home/users/tic_163_uma/mpascual/execs/menflow/finetune_fm_volume/runs
+
+run_name: a100_k5
+modalities: [t1c]
+log_level: INFO
+
+# K-fold selection. Override `fold` per launch (see launcher_finetune_fm_volume.sh).
+kfold: 5
+fold: 0
+
+train:
+  batch_size: 4
+  grad_accum: 4         # effective batch 16
+  max_steps: 50000
+  lr: 1.0e-4
+  weight_decay: 1.0e-2
+  warmup_steps: 1000
+  p_uncond: 0.1
+  grad_clip: 1.0
+  ema_decay: 0.9999
+  seed: 42
+  num_workers: 4
+  val_interval: 500
+  sample_interval: 2500
+  save_interval: 5000
+  autocast_dtype: bfloat16   # A100 supports bf16 natively
+  activation_checkpointing: false
+  val_max_batches: 64
+
+lora:
+  rank: 8
+  alpha: 8.0
+  dropout: 0.0
+  target_modules: [to_q, to_k, to_v, out_proj]
+  bias: none
+
+conditioner:
+  fourier_features: 32
+  fourier_sigma: 1.0
+  embed_dim: 256
+  hidden_dim: 256
+
+# In-train ODE sample dumps. n_anchors × log_v_grid forward passes per dump,
+# each anchor a different noise seed → small grid montages for monitoring
+# the conditioning evolution.
+sampling:
+  n_anchors: 4
+  log_v_grid: [-3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0]
+  n_ode_steps: 30
+  cfg_scale: 4.0
+
+# slurm: block consumed by launcher_finetune_fm_volume.sh; ignored by the engine.
+slurm:
+  partition: dgx2q
+  qos: dgx2q
+  constraint: dgx
+  gres: "gpu:1"
+  cpus_per_task: 8
+  mem: "64G"
+  time: "48:00:00"

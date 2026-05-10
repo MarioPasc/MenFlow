@@ -23,15 +23,16 @@ import abc
 import datetime as _dt
 import json
 import logging
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 import h5py
 import numpy as np
 from tqdm import tqdm
 
-from menflow.data.h5_schema import H5Schema, SCHEMA_VERSION
+from menflow.data.h5_schema import SCHEMA_VERSION, H5Schema
 
 logger = logging.getLogger(__name__)
 
@@ -152,10 +153,15 @@ class H5Converter(abc.ABC):
 
     # ----- Optional hook: compose dataset-defined splits -----
 
-    def build_splits(
+    def build_kfold_splits(
         self, records: list[ScanRecord], patient_list: list[str]
-    ) -> dict[str, np.ndarray]:
-        """Return name → patient-index array. Default: empty (no splits)."""
+    ) -> dict[int, KFoldLayout]:  # noqa: F821 — forward ref to avoid cycle
+        """Return ``{k: KFoldLayout}``; written to ``splits/kfold/``.
+
+        Default: empty mapping (no splits). Subclasses that want native
+        cross-validation splits should call
+        :func:`menflow.data.kfold_splits.build_kfold_splits`.
+        """
         return {}
 
     # ----- Optional hook: per-scan metadata fields to persist -----
@@ -183,9 +189,12 @@ class H5Converter(abc.ABC):
         Parameters
         ----------
         roots
-            Mapping from a free-form key (e.g. ``"train"``, ``"val"``) to the
-            root directory containing that subset. The semantics of the keys
-            are dataset-specific.
+            Mapping from a converter-defined key (e.g. ``"train"``/``"val"``
+            for BraTS-MEN's directory partition, or ``"root"`` for cohorts
+            delivered as a single directory) to the root path. These keys
+            describe **input directory layout**, not the H5 ``splits/*``
+            datasets — those are produced by :meth:`build_splits` and the
+            canonical names follow E3.1 (``e3_train``, ``e3_val``, ``e3_test``).
         output_path
             Destination ``.h5`` file. Parent directories are created.
         max_scans
@@ -223,7 +232,9 @@ class H5Converter(abc.ABC):
             compression_level=compression_level,
         )
 
-        from menflow.data.h5_schema import assert_h5_valid  # local import avoids cycle in re-imports
+        from menflow.data.h5_schema import (
+            assert_h5_valid,  # local import avoids cycle in re-imports
+        )
 
         assert_h5_valid(output_path, self.SCHEMA)
         logger.info("Schema validation passed for %s", output_path)
@@ -280,8 +291,8 @@ class H5Converter(abc.ABC):
             f.attrs["orientation"] = str(self.orientation)
             f.attrs["label_map"] = json.dumps({int(k): str(v) for k, v in self.label_map.items()})
             f.attrs["intensity_normalized"] = bool(self.intensity_normalized)
-            f.attrs["created_at"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
-            f.attrs["has_segmentation_any"] = bool(False)  # filled below
+            f.attrs["created_at"] = _dt.datetime.now(_dt.UTC).isoformat()
+            f.attrs["has_segmentation_any"] = False  # filled below
 
             # --- Datasets ---
             images = f.create_dataset(
@@ -315,9 +326,7 @@ class H5Converter(abc.ABC):
 
             # --- Longitudinal CSR ---
             long_grp = f.create_group("longitudinal")
-            long_grp.create_dataset(
-                "patient_offsets", data=patient_offsets.astype(np.int32)
-            )
+            long_grp.create_dataset("patient_offsets", data=patient_offsets.astype(np.int32))
             long_grp.create_dataset(
                 "patient_list",
                 data=np.asarray(patient_list, dtype=object),
@@ -371,12 +380,14 @@ class H5Converter(abc.ABC):
                 else:
                     meta_grp.create_dataset(name, data=arr)
 
-            # --- Splits ---
-            splits = self.build_splits(records, patient_list)
-            if splits:
+            # --- Splits (k-fold layout, written under /splits/kfold/) ---
+            layouts = self.build_kfold_splits(records, patient_list)
+            if layouts:
+                from menflow.data.kfold_splits import write_kfold_to_h5
+
                 splits_grp = f.create_group("splits")
-                for name, indices in splits.items():
-                    splits_grp.create_dataset(name, data=np.asarray(indices, dtype=np.int32))
+                kfold_grp = splits_grp.create_group("kfold")
+                write_kfold_to_h5(kfold_grp, layouts)
 
             # Final flag update
             f.attrs["has_segmentation_any"] = bool(n_with_seg > 0)

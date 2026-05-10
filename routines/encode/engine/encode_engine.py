@@ -377,11 +377,23 @@ def _truncated_csr(src: h5py.File, n_scans: int) -> tuple[list[str], np.ndarray]
 
 
 def _truncated_splits(src: h5py.File, *, n_patients_kept: int) -> dict[str, np.ndarray]:
-    """Filter source splits to the kept-patient subset."""
+    """Filter source splits to the kept-patient subset and to E3-canonical names.
+
+    Only the splits in :data:`menflow.maisi_autoencoder.latents_h5.EXPECTED_E3_SPLITS`
+    are propagated; other names (notably the legacy BraTS challenge ``train``/``val``
+    partition) are dropped with an ``INFO`` log line.
+    """
+    from menflow.maisi_autoencoder.latents_h5 import EXPECTED_E3_SPLITS
+
     out: dict[str, np.ndarray] = {}
     if "splits" not in src:
         return out
     for name, ds in src["splits"].items():
+        if name not in EXPECTED_E3_SPLITS:
+            logger.info(
+                "Dropping non-canonical source split %r (allowed: %s)", name, EXPECTED_E3_SPLITS
+            )
+            continue
         idx = ds[:]
         out[name] = idx[idx < n_patients_kept].astype(np.int32)
     return out

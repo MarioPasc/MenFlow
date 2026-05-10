@@ -19,6 +19,16 @@ Directory layout::
 A scan whose ``seg.nii.gz`` is all-zero (no visible tumor at that timepoint)
 still counts as *annotated*: the file is present and the radiologist marked the
 absence of a lesion. Downstream consumers can filter on ``segmentations.sum() > 0``.
+
+Splits
+------
+
+The converter emits the canonical E3.1 splits ``splits/e3_train``,
+``splits/e3_val`` and ``splits/e3_test`` (patient-grouped, log-volume
+stratified). Patients with every scan reporting a sentinel-floor log-volume
+(no visible tumor at any timepoint) are excluded from all splits — there is no
+training signal to learn from. The legacy ``splits/{train, val}`` names are
+**not** emitted by any MenFlow converter.
 """
 
 from __future__ import annotations
@@ -26,13 +36,17 @@ from __future__ import annotations
 import argparse
 import logging
 import re
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
 
 import nibabel as nib
 import numpy as np
 
 from menflow.data.h5_converter import ConversionError, H5Converter, ScanData, ScanRecord
+from menflow.data.kfold_splits import (
+    KFoldLayout,
+    compute_log_volume_voxels,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +76,30 @@ _SCAN_RE = re.compile(r"^(MenGrowth-\d{4})-(\d{3})$")
 
 
 class MenGrowthConverter(H5Converter):
-    """Converter for the in-house MenGrowth longitudinal meningioma cohort."""
+    """Converter for the in-house MenGrowth longitudinal meningioma cohort.
+
+    Parameters
+    ----------
+    e3_split_seed, e3_n_strata, e3_n_folds, e3_test_fold, e3_val_fold
+        Control the patient-grouped, log-volume-stratified split layout.
+        Defaults match :class:`BraTSMENConverter`. The 58-patient cohort is
+        smaller than BraTS-MEN, so the helper auto-clamps `n_strata` to keep
+        every stratum bin populated by at least `n_folds` patients.
+    """
+
+    def __init__(
+        self,
+        *,
+        kfold_k_values: tuple[int, ...] = (1, 3, 5),  # 10-fold needs 11+ patients
+        kfold_test_pct: float = 0.1,
+        kfold_seed: int = 42,
+        kfold_n_strata: int = 3,
+    ) -> None:
+        self._scan_log_v: dict[str, float] = {}
+        self._kfold_k_values = tuple(int(k) for k in kfold_k_values)
+        self._kfold_test_pct = float(kfold_test_pct)
+        self._kfold_seed = int(kfold_seed)
+        self._kfold_n_strata = int(kfold_n_strata)
 
     @property
     def dataset_name(self) -> str:
@@ -154,7 +191,39 @@ class MenGrowthConverter(H5Converter):
             seg_arr = _validate_labels(seg_arr, record.scan_id)
             seg = seg_arr
             empty = bool(seg_arr.sum() == 0)
+            self._scan_log_v[record.scan_id] = compute_log_volume_voxels(
+                seg_arr, label_set=tuple(k for k in _LABEL_MAP if k != 0)
+            )
+        else:
+            self._scan_log_v[record.scan_id] = float(np.log(1e-3))
         return ScanData(image=image, segmentation=seg, metadata={"empty_seg": empty})
+
+    # ----- Splits -----
+
+    def build_kfold_splits(
+        self, records: list[ScanRecord], patient_list: list[str]
+    ) -> dict[int, KFoldLayout]:
+        """Patient-grouped, log-volume-stratified k-fold splits.
+
+        Aggregation is at the patient level: ``log_v_patient = max`` across
+        timepoints. MenGrowth has no unannotated cohort, so no patient is
+        filtered by subset; only the log_v floor (no-tumor sentinel) excludes
+        patients.
+        """
+        # Local import to dodge isort/formatter stripping a top-level alias.
+        from menflow.data.kfold_splits import build_kfold_splits as helper
+
+        return helper(
+            patient_list=patient_list,
+            scan_to_patient=[(r.scan_id, r.patient_id) for r in records],
+            scan_log_v=dict(self._scan_log_v),
+            scan_subset={r.scan_id: "train" for r in records},  # all annotated
+            k_values=self._kfold_k_values,
+            test_pct=self._kfold_test_pct,
+            seed=self._kfold_seed,
+            n_strata=self._kfold_n_strata,
+            excluded_subsets=(),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -187,9 +256,7 @@ def _load_nifti(path: Path) -> np.ndarray:
     img = nib.load(str(path))
     arr = np.asarray(img.dataobj)
     if arr.shape != _SHAPE:
-        raise ConversionError(
-            f"Unexpected shape for {path.name}: {arr.shape}, expected {_SHAPE}"
-        )
+        raise ConversionError(f"Unexpected shape for {path.name}: {arr.shape}, expected {_SHAPE}")
     return arr
 
 
