@@ -120,6 +120,9 @@ menflow-e1 = "experiments.maisi_autoencoder_patology_preservation.cli:main"
 menflow-e2-1 = "experiments.E2_1_recoverability.cli:main"
 menflow-e2-2 = "experiments.E2_2_identifiability.cli:main"
 menflow-e2-3 = "experiments.E2_3_spatial_localization.cli:main"
+menflow-steer-decode = "routines.steer_decode.cli:main"
+menflow-e2-4 = "experiments.E2_4_causal_steering.cli:main"
+menflow-segment-brats = "routines.segment_brats.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -94,10 +94,20 @@ class EncodeEngine:
 
     def run(self) -> Path:
         cfg = self.config
+        if _latent_already_encoded(cfg.output_h5):
+            size_mb = cfg.output_h5.stat().st_size / (1024**2)
+            logger.info(
+                "Skipping encode: output already exists at %s (%.1f MB). "
+                "Delete the file to force re-encoding.",
+                cfg.output_h5,
+                size_mb,
+            )
+            return cfg.output_h5
         if not cfg.source_h5.is_file():
             raise FileNotFoundError(cfg.source_h5)
         if not cfg.checkpoint.is_file():
             raise FileNotFoundError(cfg.checkpoint)
+        _prepare_output_path(cfg.output_h5)
 
         with h5py.File(cfg.source_h5, "r") as src:
             (
@@ -325,6 +335,27 @@ def _decode(value: object) -> str:
     if isinstance(value, bytes):
         return value.decode("utf-8")
     return str(value)
+
+
+def _prepare_output_path(path: Path) -> None:
+    """Ensure the parent directory of *path* exists before opening for write."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _latent_already_encoded(path: Path) -> bool:
+    """True iff the given path is a non-empty, openable HDF5 file.
+
+    Used to short-circuit ``EncodeEngine.run`` on re-launch so an encode pass
+    that already finished is not redone. The check opens the file in read mode
+    so a half-written or truncated artifact is not mistaken for a finished one.
+    """
+    if not path.is_file() or path.stat().st_size == 0:
+        return False
+    try:
+        with h5py.File(path, "r"):
+            return True
+    except OSError:
+        return False
 
 
 def _ceil_to_multiple(n: int, m: int) -> int:

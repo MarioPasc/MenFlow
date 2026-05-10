@@ -1,0 +1,27 @@
+# Steer-decode routine — default config (template; override per environment).
+# Performs the latent perturbation + decode + drift sweep for E2.4 Phase A.
+#
+# Required overrides: latents_h5, source_h5, direction_npz, checkpoint, output_dir.
+
+latents_h5: null
+source_h5: null
+direction_npz: null
+checkpoint: null
+output_dir: null
+
+modality: t1c
+modality_index: 0
+operator: local                          # E2.3 carry-forward; "global" = control comparator
+deltas: [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5]
+mask_dilation_radius: 0
+n_anchors_per_bin: 1
+volume_bin_edges_log_cm3: [-2.3, -0.5, 0.7, 1.5, 2.3, 4.5]   # B1..B5, matches E1 bins
+splits_to_use: ["val"]
+mask_label_set: [1, 2, 3]                # all non-zero meningioma labels
+dtype: float16
+device: cuda
+seed: 0
+save_decoded_nifti: true
+save_steered_latents: false
+intensity_rescale: true
+log_level: INFO

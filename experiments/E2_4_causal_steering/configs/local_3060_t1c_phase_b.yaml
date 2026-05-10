@@ -1,0 +1,38 @@
+# E2.4 Phase B — Docker-backed BraTS segmenter (BraTS25_1) on the 5x7 sweep.
+#
+# Reuses Phase A's sweep_results.h5 + steered NIfTIs at output_dir; decodes
+# t1n/t2f/t2w companion modalities at Δ=0; segments per (anchor, Δ); fills
+# decoded_log_v; runs analysis + headline grids.
+
+# Routine-shared keys (passed through to SteerDecodeRoutineConfig but not used
+# in phase_b mode unless sweep_results.h5 is missing).
+latents_h5: /media/mpascual/MeningD2/MAISI_VAEGAN_LATENTS/brats_men_maisi_latents.h5
+source_h5: /media/mpascual/MeningD2/MENINGIOMAS/BRATS_MEN/h5/brats_men.h5
+direction_npz: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_1_recoverability/per_modality/t1c/direction.npz
+checkpoint: /media/mpascual/Sandisk2TB/research/menflow/checkpoints/NV-Generate-MR/models/autoencoder_v2.pt
+output_dir: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_4_causal_steering/per_modality/t1c
+
+modality: t1c
+modality_index: 0
+operator: local
+deltas: [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5]
+mask_dilation_radius: 0
+n_anchors_per_bin: 1
+volume_bin_edges_log_cm3: [-2.3, -0.5, 0.7, 1.5, 2.3, 4.5]
+splits_to_use: ["train"]
+mask_label_set: [1, 2, 3]
+dtype: float16
+device: cuda
+seed: 0
+save_decoded_nifti: true
+save_steered_latents: false
+intensity_rescale: true
+
+# Experiment options:
+mode: phase_b
+write_phase_a_report: false
+phase_b_model_id: BraTS25_1
+phase_b_gpu: true
+phase_b_timeout_s: 1800.0
+phase_b_direction_sign: 1
+log_level: INFO

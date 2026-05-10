@@ -1,0 +1,25 @@
+# RTX 3060 smoke — 1 anchor x 3 deltas (single mid-volume bin), t1c, fp16.
+# Validates: load MAISI, decode, re-encode, NIfTI write, sweep H5 dataset.
+
+latents_h5: /media/mpascual/MeningD2/MAISI_VAEGAN_LATENTS/brats_men_maisi_latents.h5
+source_h5: /media/mpascual/MeningD2/MENINGIOMAS/BRATS_MEN/h5/brats_men.h5
+direction_npz: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_1_recoverability/per_modality/t1c/direction.npz
+checkpoint: /media/mpascual/Sandisk2TB/research/menflow/checkpoints/NV-Generate-MR/models/autoencoder_v2.pt
+output_dir: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_4_causal_steering/smoke/t1c
+
+modality: t1c
+modality_index: 0
+operator: local
+deltas: [-0.5, 0.0, 0.5]
+mask_dilation_radius: 0
+n_anchors_per_bin: 1
+volume_bin_edges_log_cm3: [0.7, 2.3]   # one mid-volume bin only
+splits_to_use: ["train"]   # BraTS-MEN-2023 val ships without masks; train pool is the only option
+mask_label_set: [1, 2, 3]
+dtype: float16
+device: cuda
+seed: 0
+save_decoded_nifti: true
+save_steered_latents: false
+intensity_rescale: true
+log_level: INFO

@@ -103,6 +103,7 @@ class DecodeEngine:
             raise FileNotFoundError(cfg.latent_h5)
         if not cfg.checkpoint.is_file():
             raise FileNotFoundError(cfg.checkpoint)
+        _prepare_output_path(cfg.output_h5)
 
         with h5py.File(cfg.latent_h5, "r") as lat:
             geom = _LatentGeometry.from_attrs(lat)
@@ -388,3 +389,8 @@ def _decode(value: object) -> str:
     if isinstance(value, bytes):
         return value.decode("utf-8")
     return str(value)
+
+
+def _prepare_output_path(path: Path) -> None:
+    """Ensure the parent directory of *path* exists before opening for write."""
+    path.parent.mkdir(parents=True, exist_ok=True)

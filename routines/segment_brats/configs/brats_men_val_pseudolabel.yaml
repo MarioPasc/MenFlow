@@ -1,0 +1,19 @@
+# segment-brats — pseudo-label the BraTS-MEN-2023 val split.
+#
+# The official val split ships without segmentations. Running BraTS25_1 over
+# its 141 scans yields pseudo-labels usable for downstream routines (E2.6,
+# MenGrowth integration). Output H5/manifest can be merged back into the
+# unified BraTS-MEN H5 in a follow-up routine.
+
+output_dir: /media/mpascual/Sandisk2TB/research/menflow/experiments/segment_brats/brats_men_val_BraTS25_1
+model: BraTS25_1
+
+input_h5: /media/mpascual/MeningD2/MENINGIOMAS/BRATS_MEN/h5/brats_men.h5
+h5_modality_order: ["t1c", "t1n", "t2f", "t2w"]
+h5_split: val
+
+gpu: true
+limit: null
+timeout_s: 1800.0
+log_level: INFO
+keep_extracted_h5_dir: false
