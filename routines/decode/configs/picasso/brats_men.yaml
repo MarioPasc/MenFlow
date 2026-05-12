@@ -35,7 +35,7 @@ slurm:
   job_name: menflow_decode_bratsmen
   partition: dgx
   constraint: dgx
-  time: "0-04:00:00"
+  time: "0-08:00:00"  # 1141 scans × ~19 s/it ≈ 6 h on a single A100; previous 4 h hit the time limit at ~62 %
   cpus_per_task: 16
   mem: 64G
   gres: "gpu:1"

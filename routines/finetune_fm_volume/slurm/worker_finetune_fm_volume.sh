@@ -45,24 +45,33 @@ nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader 2>
 echo ""
 
 # --------------------------------------------------------------------------
-# Materialise per-fold YAML on the host (outside the container; PyYAML must
-# be available in the host conda env or via the system python3+pyyaml).
+# Materialise per-fold YAML on the host. Picasso's system python3 does not
+# ship PyYAML, so the unconditioned previous version raised
+# `ModuleNotFoundError: No module named 'yaml'`. Activate the `menflow`
+# conda env (which has PyYAML) before invoking python.
 # --------------------------------------------------------------------------
 mkdir -p "${PER_FOLD_CONFIG_DIR}"
 PER_FOLD_CONFIG="${PER_FOLD_CONFIG_DIR}/${RUN_NAME}.yaml"
 
-python3 - <<PYEOF
-import yaml, copy
+CONDA_ENV_NAME="${CONDA_ENV:-menflow}"
+# `conda shell.bash hook` exposes the `conda activate` function; the eval is
+# tolerant if conda is missing (we fall back to system python below).
+if command -v conda >/dev/null 2>&1; then
+    eval "$(conda shell.bash hook 2>/dev/null)" || true
+    conda activate "${CONDA_ENV_NAME}" 2>/dev/null || \
+        echo "[warn] conda activate ${CONDA_ENV_NAME} failed; falling back to default python3"
+fi
+HOST_PY="$(command -v python || command -v python3)"
+echo "Host python:  ${HOST_PY}"
 
+"${HOST_PY}" - <<PYEOF
+import yaml
 with open("${BASE_CONFIG}") as fh:
-    cfg = yaml.safe_load(fh)
-
+    cfg = yaml.safe_load(fh) or {}
 cfg["fold"]     = int("${FOLD}")
 cfg["run_name"] = "${RUN_NAME}"
-
 with open("${PER_FOLD_CONFIG}", "w") as fh:
     yaml.dump(cfg, fh, default_flow_style=False, allow_unicode=True)
-
 print(f"[fold-config] written to ${PER_FOLD_CONFIG}")
 PYEOF
 

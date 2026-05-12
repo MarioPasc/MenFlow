@@ -1,0 +1,69 @@
+# Picasso loginexa — 1-fold plumbing smoke test on the login node's V100-DGXS-32GB.
+#
+# loginexa is an interactive front-end (no sbatch) with a hard 30-min CPU+GPU
+# budget per process. This config is sized for a 15–20 min wall-clock window:
+# enough to exercise the full engine path (loaders, identity-at-init, train
+# loop, validation, checkpointing, optional sample dump) on a single fold
+# before committing to the full A100 k-fold run on dgx.
+#
+# V100-DGXS does NOT support bfloat16 in compute; use float16 with the
+# torch.amp grad scaler. fp32 is too slow for the 30-min window.
+#
+# Paths mirror routines/finetune_fm_volume/configs/picasso_a100_kfold.yaml.
+# The runner script under slurm/loginexa/ activates conda via
+# `source .../menflow/bin/activate` (no `conda activate`) and runs python
+# directly — no sbatch, no Singularity.
+
+fm_checkpoint: /mnt/home/users/tic_163_uma/mpascual/fscratch/checkpoints/NV-Generate-MR/models/diff_unet_3d_rflow-mr.pt
+ae_checkpoint: /mnt/home/users/tic_163_uma/mpascual/fscratch/checkpoints/NV-Generate-MR/models/autoencoder_v2.pt
+latent_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/latents/brats_men_maisi_latents.h5
+features_h5_dir: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/latents/per_modality_features
+source_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/brats_men.h5
+output_dir: /mnt/home/users/tic_163_uma/mpascual/execs/menflow/finetune_fm_volume/runs_loginexa
+
+run_name: loginexa_v100_smoke
+modalities: [t1c]
+log_level: INFO
+
+# Single fold only — k=5 layout, fold=0 = the same val/test the A100 fold-0
+# job sees, so artefacts here are comparable as a smoke against fold-0 dgx.
+kfold: 5
+fold: 0
+
+train:
+  batch_size: 2
+  grad_accum: 4          # effective batch 8 — fits in 32 GB V100 with fp16
+  max_steps: 120
+  lr: 1.0e-4
+  weight_decay: 1.0e-2
+  warmup_steps: 20
+  p_uncond: 0.1
+  grad_clip: 1.0
+  ema_decay: 0.999       # short run → looser EMA so the shadow tracks the train
+  seed: 42
+  num_workers: 4
+  val_interval: 60
+  sample_interval: 120   # one decode-dump at the end
+  save_interval: 120
+  autocast_dtype: float16
+  activation_checkpointing: false
+  val_max_batches: 16
+
+lora:
+  rank: 8
+  alpha: 8.0
+  dropout: 0.0
+  target_modules: [to_q, to_k, to_v, out_proj]
+  bias: none
+
+conditioner:
+  fourier_features: 32
+  fourier_sigma: 1.0
+  embed_dim: 256
+  hidden_dim: 256
+
+sampling:
+  n_anchors: 2
+  log_v_grid: [-2.0, 0.0, 2.0]
+  n_ode_steps: 10
+  cfg_scale: 4.0
