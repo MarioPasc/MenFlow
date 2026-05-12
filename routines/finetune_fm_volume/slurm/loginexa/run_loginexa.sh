@@ -33,8 +33,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROUTINE_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 REPO_DIR="$(cd "${ROUTINE_DIR}/../.." && pwd)"
 
-# `source <env>/bin/activate` per the loginexa convention (no `conda activate`).
-CONDA_ACTIVATE="${CONDA_ACTIVATE:-/mnt/home/users/tic_163_uma/mpascual/fscratch/conda_envs/menflow/bin/activate}"
+# Two ways to enter the env, in order of preference:
+#   1. CONDA_PREFIX → we call ${CONDA_PREFIX}/bin/python directly. No `activate`
+#      script needed; conda envs created with `conda create -p` do not ship
+#      one. This is what loginexa expects.
+#   2. CONDA_ACTIVATE → if you do have an activate script (e.g. a venv or the
+#      base conda), set CONDA_ACTIVATE=/path/to/bin/activate and the runner
+#      will `source` it instead.
+CONDA_PREFIX_DEFAULT="/mnt/home/users/tic_163_uma/mpascual/fscratch/conda_envs/menflow"
+CONDA_PREFIX="${CONDA_PREFIX:-${CONDA_PREFIX_DEFAULT}}"
+CONDA_ACTIVATE="${CONDA_ACTIVATE:-}"
 CONFIG="${ROUTINE_DIR}/configs/loginexa.yaml"
 FOLD=""              # if empty, the value in the YAML is used (default 0)
 GPU=""               # if empty, CUDA picks all visible GPUs; the YAML uses 1
@@ -69,9 +77,23 @@ if [[ ! -f "${CONFIG}" ]]; then
 fi
 CONFIG="$(readlink -f "${CONFIG}")"
 
-if [[ ! -f "${CONDA_ACTIVATE}" ]] && ! ${DRY_RUN}; then
-    echo "[error] conda activate script not found: ${CONDA_ACTIVATE}" >&2
-    echo "        override with CONDA_ACTIVATE=/path/to/env/bin/activate" >&2
+# Resolve env entry: prefer CONDA_ACTIVATE if it points at a real file,
+# otherwise fall back to direct invocation via CONDA_PREFIX/bin/python.
+ENV_MODE=""
+if [[ -n "${CONDA_ACTIVATE}" && -f "${CONDA_ACTIVATE}" ]]; then
+    ENV_MODE="activate"
+elif [[ -x "${CONDA_PREFIX}/bin/python" ]]; then
+    ENV_MODE="prefix"
+elif ${DRY_RUN}; then
+    ENV_MODE="prefix"   # tolerant in dry-run so users can preview off-cluster
+else
+    echo "[error] cannot locate the menflow env." >&2
+    echo "        Tried:" >&2
+    echo "          CONDA_ACTIVATE=${CONDA_ACTIVATE:-<unset>}" >&2
+    echo "          CONDA_PREFIX=${CONDA_PREFIX}/bin/python  (not executable)" >&2
+    echo "        Fix one of:" >&2
+    echo "          export CONDA_PREFIX=/abs/path/to/your/menflow/env" >&2
+    echo "          export CONDA_ACTIVATE=/abs/path/to/bin/activate" >&2
     exit 2
 fi
 
@@ -106,7 +128,12 @@ echo "------------------------------------------"
 echo "Host:           $(hostname)"
 echo "Start:          $(date)"
 echo "Repo:           ${REPO_DIR}"
-echo "Conda activate: ${CONDA_ACTIVATE}"
+echo "Env mode:       ${ENV_MODE}"
+if [[ "${ENV_MODE}" == "activate" ]]; then
+    echo "Conda activate: ${CONDA_ACTIVATE}"
+else
+    echo "Conda prefix:   ${CONDA_PREFIX}"
+fi
 echo "Base config:    ${CONFIG}"
 echo "Per-fold yaml:  ${PER_FOLD_CONFIG}"
 echo "Override fold:  ${FOLD:-<from yaml>}"
@@ -121,17 +148,34 @@ fi
 echo ""
 
 # --------------------------------------------------------------------------
-# Activate venv (no `conda activate` — loginexa convention)
+# Enter the env. Either `source <activate>` (sets CONDA_PREFIX and PATH
+# itself) or use the env's python directly (manual PATH + CONDA_PREFIX).
+# The latter is what conda activate does internally; it works for envs
+# created with `conda create -p <prefix>` that have no activate script.
 # --------------------------------------------------------------------------
 if ${DRY_RUN}; then
-    HOST_PY="$(command -v python || command -v python3)"
-    echo "[dry-run] would source ${CONDA_ACTIVATE}"
-else
+    if [[ "${ENV_MODE}" == "activate" ]]; then
+        echo "[dry-run] would: source ${CONDA_ACTIVATE}"
+        HOST_PY="$(command -v python || command -v python3)"
+    else
+        echo "[dry-run] would: export PATH=${CONDA_PREFIX}/bin:\$PATH"
+        HOST_PY="${CONDA_PREFIX}/bin/python"
+        [[ -x "${HOST_PY}" ]] || HOST_PY="$(command -v python || command -v python3)"
+    fi
+elif [[ "${ENV_MODE}" == "activate" ]]; then
     # shellcheck disable=SC1090
     source "${CONDA_ACTIVATE}"
     HOST_PY="$(command -v python)"
+else
+    export CONDA_PREFIX="${CONDA_PREFIX}"
+    export PATH="${CONDA_PREFIX}/bin:${PATH}"
+    # Some CUDA-bundled packages look at LD_LIBRARY_PATH; keep it benign.
+    export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    HOST_PY="${CONDA_PREFIX}/bin/python"
 fi
 echo "Python: ${HOST_PY} ($("${HOST_PY}" --version 2>&1))"
+"${HOST_PY}" -c "import sys, yaml, torch; print(f'  torch={torch.__version__}  yaml={yaml.__version__}  exe={sys.executable}')" \
+    || echo "[warn] python sanity import failed — torch/yaml may be missing in the env"
 echo ""
 
 # --------------------------------------------------------------------------
