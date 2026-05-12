@@ -68,6 +68,11 @@ dependencies = [
     # specific compatibility reason.
     "torch>=2.2,<3",
     "monai>=1.3,<2",
+    # MONAI treats `einops` as an optional import, but the MAISI diffusion
+    # U-Net path (DiffusionModelUNetMaisi → SABlock → Rearrange) hard-imports
+    # it. Without einops the MAISI U-Net construction raises
+    # `monai.utils.module.OptionalImportError: No module named 'einops'`.
+    "einops>=0.7",
     # Parameter-efficient finetuning. peft.inject_adapter_in_model patches
     # target Linear submodules in place with LoRA, preserving the host model's
     # forward signature — required by routines/finetune_fm_volume. The upper
