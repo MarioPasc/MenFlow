@@ -1,0 +1,21 @@
+# segment-brats routine — default config (template).
+#
+# Required overrides: output_dir, exactly one of (input_dir | input_h5).
+
+output_dir: null
+model: BraTS25_1               # see experiments.E2._lib.segmentation.models.BRATS_MODELS
+
+# Mode 1: directory of per-subject NIfTI dirs in BraTS canonical naming.
+input_dir: null
+
+# Mode 2: unified-schema H5 (extracts per-subject NIfTIs to a tmpdir first).
+input_h5: null
+h5_modality_order: ["t1c", "t1n", "t2f", "t2w"]
+h5_split: null                 # e.g. "val" to restrict; null = all subjects
+
+gpu: true
+limit: null
+include_subject_glob: null
+timeout_s: 1800.0
+log_level: INFO
+keep_extracted_h5_dir: false

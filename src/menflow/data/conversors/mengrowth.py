@@ -39,9 +39,15 @@ import re
 from collections.abc import Mapping
 from pathlib import Path
 
+import h5py
 import nibabel as nib
 import numpy as np
 
+from menflow.data.features import (
+    FeatureRegistry,
+    FeatureSpec,
+    laterality_from_mask,
+)
 from menflow.data.h5_converter import ConversionError, H5Converter, ScanData, ScanRecord
 from menflow.data.kfold_splits import (
     KFoldLayout,
@@ -132,6 +138,106 @@ class MenGrowthConverter(H5Converter):
     def metadata_fields(self) -> dict[str, np.dtype]:
         # Per-scan flags: empty_seg (no tumor visible at this timepoint).
         return {"empty_seg": np.dtype("bool")}
+
+    # ----- One-shot features attached at build time -----
+
+    def feature_registry(self) -> FeatureRegistry:
+        """Longitudinal cohort features attached to /features/."""
+        return FeatureRegistry(
+            dataset_name=self.dataset_name,
+            features=(
+                FeatureSpec(
+                    name="n_voxels_tumor",
+                    dtype="int64",
+                    shape=(),
+                    units="voxels",
+                    description=(
+                        "Number of tumor voxels (labels 1-3) in the expert segmentation; "
+                        "0 for empty-seg timepoints."
+                    ),
+                    source="derived:segmentation",
+                ),
+                FeatureSpec(
+                    name="log_volume_cm3",
+                    dtype="float32",
+                    shape=(),
+                    units="log(cm^3)",
+                    description=(
+                        "log( n_voxels * prod(spacing_mm) / 1000 ) for the tumor mask; "
+                        "NaN when no tumor voxel is present."
+                    ),
+                    source="derived:segmentation",
+                ),
+                FeatureSpec(
+                    name="delta_log_volume",
+                    dtype="float32",
+                    shape=(),
+                    units="log(cm^3)",
+                    description=(
+                        "log_volume_cm3 at this timepoint minus log_volume_cm3 at the "
+                        "previous timepoint of the same patient; NaN at first timepoint "
+                        "or when either side has no visible tumor."
+                    ),
+                    source="derived:segmentation",
+                ),
+                FeatureSpec(
+                    name="laterality",
+                    dtype="O",
+                    shape=(),
+                    units="",
+                    description=(
+                        "L/R/B side classification from the tumor centroid; empty string "
+                        "for empty-seg timepoints."
+                    ),
+                    source="derived:segmentation",
+                ),
+            ),
+        )
+
+    def compute_features(
+        self, records: list[ScanRecord], h5_file: h5py.File
+    ) -> dict[str, np.ndarray]:
+        """Compute per-scan features including longitudinal Δ log V."""
+        n_scans = len(records)
+        n_voxels = np.zeros(n_scans, dtype=np.int64)
+        log_v = np.full(n_scans, np.nan, dtype=np.float32)
+        lat = np.empty(n_scans, dtype=object)
+
+        spacing = float(np.prod(self.spacing_mm))
+        tumor_labels = tuple(k for k in _LABEL_MAP if k != 0)
+
+        segs = h5_file["segmentations"]
+        has_seg = h5_file["has_segmentation"][:]
+
+        for i in range(n_scans):
+            if not has_seg[i]:
+                lat[i] = ""
+                continue
+            seg = segs[i]
+            tumor = np.isin(seg, tumor_labels)
+            vox = int(tumor.sum())
+            n_voxels[i] = vox
+            if vox > 0:
+                log_v[i] = float(np.log(vox * spacing / 1000.0))
+                lat[i] = laterality_from_mask(tumor)
+            else:
+                lat[i] = ""
+
+        # Longitudinal delta: use CSR offsets so we never cross patient boundaries.
+        delta = np.full(n_scans, np.nan, dtype=np.float32)
+        offsets = h5_file["longitudinal/patient_offsets"][:]
+        for p in range(len(offsets) - 1):
+            start, end = int(offsets[p]), int(offsets[p + 1])
+            for j in range(start + 1, end):
+                if not (np.isnan(log_v[j]) or np.isnan(log_v[j - 1])):
+                    delta[j] = log_v[j] - log_v[j - 1]
+
+        return {
+            "n_voxels_tumor": n_voxels,
+            "log_volume_cm3": log_v,
+            "delta_log_volume": delta,
+            "laterality": lat,
+        }
 
     # ----- Discovery -----
 
