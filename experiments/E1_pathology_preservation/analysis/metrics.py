@@ -92,15 +92,33 @@ def _global_ssim(x: torch.Tensor, x_hat: torch.Tensor, *, data_range: float) -> 
 
 
 def _global_msssim(x: torch.Tensor, x_hat: torch.Tensor, *, data_range: float) -> float:
-    """MS-SSIM. Falls back to NaN for volumes too small for the 5-scale pyramid."""
+    """MS-SSIM with kernel size adapted to the smallest spatial dimension.
+
+    Default torchmetrics/MONAI uses ``kernel_size=11`` with five Gaussian weights,
+    which requires ``min_spatial > (kernel-1) * 2**(n_weights-1) = 160``. BraTS
+    cohorts at ``(240, 240, 155)`` violate this. We solve for the largest odd
+    kernel that fits the volume: ``kernel <= (min_spatial - 1) // 2**(n-1)``.
+    Returns NaN if no valid kernel ≥ 3 exists.
+    """
     spatial = tuple(int(s) for s in x.shape[1:])  # (1, H, W, D) -> (H,W,D)
-    if min(spatial) < 32:
+    min_spatial = min(spatial)
+    n_weights = 5
+    factor = 2 ** (n_weights - 1)  # 16
+    k_max = (min_spatial - 1) // factor
+    if k_max < 3:
+        return float("nan")
+    kernel_size = min(11, k_max)
+    if kernel_size % 2 == 0:
+        kernel_size -= 1
+    if kernel_size < 3:
         return float("nan")
     try:
-        metric = MultiScaleSSIMMetric(spatial_dims=3, data_range=data_range)
+        metric = MultiScaleSSIMMetric(
+            spatial_dims=3, data_range=data_range, kernel_size=kernel_size
+        )
         return float(metric(x_hat.unsqueeze(0), x.unsqueeze(0)).item())
     except Exception as exc:  # pragma: no cover — depends on input size
-        logger.warning("MS-SSIM failed, returning NaN: %s", exc)
+        logger.warning("MS-SSIM failed (kernel=%d), returning NaN: %s", kernel_size, exc)
         return float("nan")
 
 

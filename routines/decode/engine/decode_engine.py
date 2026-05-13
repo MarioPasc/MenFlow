@@ -375,9 +375,30 @@ def _initialise_output(
 
     if "splits" in src:
         splits_grp = out.create_group("splits")
-        for name, dataset in src["splits"].items():
-            mask = dataset[:] < n_patients_kept
-            splits_grp.create_dataset(name, data=dataset[:][mask].astype(np.int32))
+        _copy_splits_filtered(src["splits"], splits_grp, n_patients_kept)
+
+
+def _copy_splits_filtered(
+    src_grp: h5py.Group, dst_grp: h5py.Group, n_patients_kept: int
+) -> None:
+    """Recursively copy a `splits/` subtree, filtering patient indices.
+
+    The MenFlow schema allows nested split groups (e.g. ``splits/kfold/k5/fold0/train``).
+    This walks the tree, recreating groups in *dst_grp* and copying every leaf
+    dataset after dropping indices ``>= n_patients_kept`` (so that when the
+    recon truncates the cohort via ``max_scans``, split indices stay in range).
+    """
+    for name, obj in src_grp.items():
+        if isinstance(obj, h5py.Group):
+            sub_dst = dst_grp.create_group(name)
+            _copy_splits_filtered(obj, sub_dst, n_patients_kept)
+        elif isinstance(obj, h5py.Dataset):
+            data = obj[:]
+            if np.issubdtype(data.dtype, np.integer):
+                mask = data < n_patients_kept
+                dst_grp.create_dataset(name, data=data[mask].astype(np.int32))
+            else:
+                dst_grp.create_dataset(name, data=data)
 
 
 # ---------------------------------------------------------------------------

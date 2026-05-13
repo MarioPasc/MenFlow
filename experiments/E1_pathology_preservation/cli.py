@@ -34,6 +34,9 @@ from experiments.E1_pathology_preservation.analysis.metrics import (
 from experiments.E1_pathology_preservation.analysis.plotting import (
     render_all,
 )
+from experiments.E1_pathology_preservation.analysis.qualitative import (
+    save_qualitative_cases,
+)
 from experiments.E1_pathology_preservation.analysis.regression import (
     fit_all,
 )
@@ -73,6 +76,14 @@ class AnalysisRoutineConfig:
     metrics: tuple[str, ...] = field(default_factory=lambda: DEFAULT_METRICS)
     # which volume mask drives the §5 stratification
     stratification_volume: str = "volume_wt_cm3"
+    # qualitative dump — anchor metrics for best/worst/median selection
+    qualitative_metrics: tuple[str, ...] = (
+        "psnr_global",
+        "ssim_global",
+        "psnr_wt",
+        "ssim_wt",
+    )
+    save_qualitative: bool = True
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> AnalysisRoutineConfig:
@@ -84,6 +95,8 @@ class AnalysisRoutineConfig:
                 raw[path_key] = Path(raw[path_key]).expanduser()
         if "metrics" in raw and raw["metrics"] is not None:
             raw["metrics"] = tuple(raw["metrics"])
+        if "qualitative_metrics" in raw and raw["qualitative_metrics"] is not None:
+            raw["qualitative_metrics"] = tuple(raw["qualitative_metrics"])
         return cls(**raw)
 
 
@@ -135,6 +148,16 @@ def run(cfg: AnalysisRoutineConfig) -> Path:
         volume_field=cfg.stratification_volume,
         output_dir=fig_dir,
     )
+
+    if cfg.save_qualitative and cfg.qualitative_metrics:
+        logger.info("Saving qualitative best/worst/median NPZ cases...")
+        save_qualitative_cases(
+            df=df,
+            source_h5=cfg.source_h5,
+            recon_h5=cfg.recon_h5,
+            output_dir=cfg.output_dir,
+            anchor_metrics=cfg.qualitative_metrics,
+        )
 
     logger.info("E1 analysis complete: %s", cfg.output_dir)
     return cfg.output_dir
