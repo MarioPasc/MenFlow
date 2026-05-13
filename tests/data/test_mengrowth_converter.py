@@ -131,3 +131,51 @@ def test_mengrowth_csr_layout_is_correct(synthetic_mengrowth: Path, tmp_path: Pa
         assert "train" not in f["splits"]
         assert "val" not in f["splits"]
         assert "e3_train" not in f["splits"]
+
+
+@pytest.mark.integration
+def test_mengrowth_emits_documented_features(synthetic_mengrowth: Path, tmp_path: Path) -> None:
+    """Longitudinal features include CSR-aware delta_log_volume."""
+    from menflow.data.features import (
+        FEATURES_GROUP,
+        FeatureRegistry,
+        assert_features_valid,
+    )
+
+    output = tmp_path / "mengrowth.h5"
+    _build_converter().convert({"root": synthetic_mengrowth}, output)
+    assert_features_valid(output)
+
+    with h5py.File(output, "r") as f:
+        assert FEATURES_GROUP in f
+        grp = f[FEATURES_GROUP]
+        reg = FeatureRegistry.from_json(grp.attrs["registry_json"])
+        assert reg.dataset_name == "MenGrowth"
+        assert {s.name for s in reg.features} == {
+            "n_voxels_tumor",
+            "log_volume_cm3",
+            "delta_log_volume",
+            "laterality",
+        }
+        for name in reg.names():
+            ds = grp[name]
+            assert ds.shape == (int(f.attrs["n_scans"]),)
+            assert ds.attrs["description"]
+            assert ds.attrs["source"]
+            assert "units" in ds.attrs
+
+        log_v = grp["log_volume_cm3"][:]
+        delta = grp["delta_log_volume"][:]
+        # Scan index layout: [pat1-tp0, pat1-tp1(empty), pat2-tp0, pat2-tp1, pat2-tp2, pat3, pat4, pat5, pat6]
+        assert not np.isnan(log_v[0])
+        assert np.isnan(log_v[1])  # empty seg -> NaN
+        # delta at any first-timepoint or NaN endpoint must be NaN.
+        assert np.isnan(delta[0])  # first timepoint of pat1
+        assert np.isnan(delta[1])  # crosses NaN
+        assert np.isnan(delta[2])  # first timepoint of pat2
+        # Within-patient consecutive non-empty timepoints have finite delta.
+        assert np.isfinite(delta[3])
+        assert np.isfinite(delta[4])
+        # Single-timepoint patients have NaN delta.
+        for i in (5, 6, 7, 8):
+            assert np.isnan(delta[i])

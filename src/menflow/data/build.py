@@ -1,12 +1,23 @@
 """Single entry point for building MenFlow HDF5 datasets.
 
-Replaces the old per-cohort console scripts (``menflow-convert-brats-men``,
-``menflow-convert-mengrowth``) with one ``menflow-build`` command that
-dispatches on ``--cohort``. The legacy scripts continue to exist as thin
-shims that delegate here, so previous shell scripts keep working.
+One ``menflow-build`` command replaces the old per-cohort scripts
+(``menflow-convert-brats-men``, ``menflow-convert-mengrowth``) and dispatches
+on ``--cohort``. The legacy scripts continue to exist as thin shims that
+delegate here, so previous shell scripts keep working.
 
-The unified CLI hard-wires the canonical k-fold layout (k ∈ {1, 3, 5, 10})
-shared across cohorts, so every output H5 carries identical split semantics.
+One-shot conversion
+-------------------
+
+The unified CLI produces the canonical k-fold layout (k ∈ {1, 3, 5, 10}) **and**
+the cohort-specific ``/features/`` group (log-volume, laterality, longitudinal
+Δ log V, ...) in a single invocation. Each cohort converter declares its
+feature schema via :meth:`menflow.data.h5_converter.H5Converter.feature_registry`
+and computes the actual values via :meth:`H5Converter.compute_features` after
+the H5 body has been written. The resulting datasets carry ``units``,
+``description``, and ``source`` attrs so the file is self-describing.
+
+Pass ``--no-features`` to opt out (useful for very large dry runs or when only
+the raw images are needed).
 """
 
 from __future__ import annotations
@@ -34,6 +45,7 @@ def build_brats_men(
     kfold_k_values: tuple[int, ...] = (1, 3, 5, 10),
     kfold_test_pct: float = 0.1,
     kfold_seed: int = 42,
+    compute_features: bool = True,
 ) -> Path:
     """Convert BraTS-MEN-2023 NIfTI cohort to the unified H5 schema."""
     from menflow.data.conversors.brats_men import BraTSMENConverter
@@ -58,6 +70,7 @@ def build_brats_men(
         output,
         max_scans=max_scans,
         compression_level=compression_level,
+        compute_features=compute_features,
     )
 
 
@@ -70,6 +83,7 @@ def build_mengrowth(
     kfold_k_values: tuple[int, ...] = (1, 3, 5),
     kfold_test_pct: float = 0.1,
     kfold_seed: int = 42,
+    compute_features: bool = True,
 ) -> Path:
     """Convert MenGrowth NIfTI cohort to the unified H5 schema."""
     from menflow.data.conversors.mengrowth import MenGrowthConverter
@@ -84,6 +98,7 @@ def build_mengrowth(
         output,
         max_scans=max_scans,
         compression_level=compression_level,
+        compute_features=compute_features,
     )
 
 
@@ -131,6 +146,14 @@ def cli() -> None:
     )
     parser.add_argument("--compression-level", type=int, default=4)
     parser.add_argument(
+        "--no-features",
+        action="store_true",
+        help=(
+            "Skip the cohort-specific /features/ group (log-volume, laterality, "
+            "Δ log V, ...). Useful for raw dry runs."
+        ),
+    )
+    parser.add_argument(
         "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"]
     )
 
@@ -176,6 +199,7 @@ def cli() -> None:
             kfold_k_values=kvals,
             kfold_test_pct=args.kfold_test_pct,
             kfold_seed=args.kfold_seed,
+            compute_features=not args.no_features,
         )
     elif args.cohort == "mengrowth":
         if args.root is None:
@@ -189,6 +213,7 @@ def cli() -> None:
             kfold_k_values=kvals,
             kfold_test_pct=args.kfold_test_pct,
             kfold_seed=args.kfold_seed,
+            compute_features=not args.no_features,
         )
     else:  # pragma: no cover — argparse choices guards this
         parser.error(f"unknown cohort {args.cohort!r}")

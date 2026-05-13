@@ -146,6 +146,59 @@ def test_converter_populates_splits_and_metadata(
 
 
 @pytest.mark.integration
+def test_converter_emits_documented_features(
+    synthetic_cohort: dict[str, Path], tmp_path: Path
+) -> None:
+    """One-shot build attaches /features/ with self-describing attrs."""
+    from menflow.data.features import (
+        FEATURES_GROUP,
+        FeatureRegistry,
+        assert_features_valid,
+    )
+
+    output = tmp_path / "brats_men.h5"
+    _build_converter().convert(synthetic_cohort, output)
+    assert_features_valid(output)
+
+    with h5py.File(output, "r") as f:
+        assert FEATURES_GROUP in f
+        grp = f[FEATURES_GROUP]
+        reg = FeatureRegistry.from_json(grp.attrs["registry_json"])
+        assert reg.dataset_name == "BraTS-MEN-2023"
+        assert {s.name for s in reg.features} == {
+            "n_voxels_tumor",
+            "log_volume_cm3",
+            "laterality",
+            "grade",
+            "age",
+            "sex",
+        }
+        for name in reg.names():
+            ds = grp[name]
+            assert ds.attrs["description"]
+            assert ds.attrs["source"]
+            assert "units" in ds.attrs
+            assert ds.shape == (int(f.attrs["n_scans"]),)
+
+        scan_ids = [s.decode() if isinstance(s, bytes) else s for s in f["scan_ids"][:]]
+        n_vox = grp["n_voxels_tumor"][:]
+        log_v = grp["log_volume_cm3"][:]
+        lat = [s.decode() if isinstance(s, bytes) else s for s in grp["laterality"][:]]
+        by_id = dict(zip(scan_ids, n_vox))
+        # 6 annotated subjects have non-zero tumor voxels; 2 val subjects are 0.
+        assert by_id["BraTS-MEN-90001-000"] == 0
+        assert by_id["BraTS-MEN-00001-000"] > 0
+        # log_volume_cm3 is NaN exactly when there is no segmentation.
+        nan_mask = np.isnan(log_v)
+        assert nan_mask[scan_ids.index("BraTS-MEN-90001-000")]
+        assert not nan_mask[scan_ids.index("BraTS-MEN-00001-000")]
+        # laterality is empty string only for unannotated scans.
+        lat_by_id = dict(zip(scan_ids, lat))
+        assert lat_by_id["BraTS-MEN-90001-000"] == ""
+        assert lat_by_id["BraTS-MEN-00001-000"] in {"L", "R", "B"}
+
+
+@pytest.mark.integration
 def test_converter_rejects_invalid_label(
     tmp_path: Path,
 ) -> None:

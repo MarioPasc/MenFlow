@@ -51,9 +51,15 @@ import re
 from collections.abc import Mapping
 from pathlib import Path
 
+import h5py
 import nibabel as nib
 import numpy as np
 
+from menflow.data.features import (
+    FeatureRegistry,
+    FeatureSpec,
+    laterality_from_mask,
+)
 from menflow.data.h5_converter import ConversionError, H5Converter, ScanData, ScanRecord
 from menflow.data.kfold_splits import (
     KFoldLayout,
@@ -155,6 +161,119 @@ class BraTSMENConverter(H5Converter):
             "age": np.dtype("float32"),
             "sex": np.dtype("O"),
             "subset": np.dtype("O"),  # "train" | "val"
+        }
+
+    # ----- One-shot features attached at build time -----
+
+    def feature_registry(self) -> FeatureRegistry:
+        """Cheap, dataset-specific features attached to /features/."""
+        return FeatureRegistry(
+            dataset_name=self.dataset_name,
+            features=(
+                FeatureSpec(
+                    name="n_voxels_tumor",
+                    dtype="int64",
+                    shape=(),
+                    units="voxels",
+                    description=(
+                        "Number of tumor voxels (labels 1-3) in the expert segmentation; "
+                        "0 for unannotated validation scans."
+                    ),
+                    source="derived:segmentation",
+                ),
+                FeatureSpec(
+                    name="log_volume_cm3",
+                    dtype="float32",
+                    shape=(),
+                    units="log(cm^3)",
+                    description=(
+                        "log( n_voxels * prod(spacing_mm) / 1000 ) for the tumor mask; "
+                        "NaN for unannotated scans."
+                    ),
+                    source="derived:segmentation",
+                ),
+                FeatureSpec(
+                    name="laterality",
+                    dtype="O",
+                    shape=(),
+                    units="",
+                    description=(
+                        "L/R/B side classification from the tumor centroid; empty string "
+                        "when no segmentation is available."
+                    ),
+                    source="derived:segmentation",
+                ),
+                FeatureSpec(
+                    name="grade",
+                    dtype="int8",
+                    shape=(),
+                    units="",
+                    description="WHO meningioma grade (1/2/3) or -1 if unknown.",
+                    source="external:clinical_xlsx",
+                ),
+                FeatureSpec(
+                    name="age",
+                    dtype="float32",
+                    shape=(),
+                    units="years",
+                    description="Patient age at imaging in years; NaN if unknown.",
+                    source="external:clinical_xlsx",
+                ),
+                FeatureSpec(
+                    name="sex",
+                    dtype="O",
+                    shape=(),
+                    units="",
+                    description=(
+                        "Patient self-reported sex as recorded in the BraTS-MEN clinical "
+                        'sheet; "unknown" if absent.'
+                    ),
+                    source="external:clinical_xlsx",
+                ),
+            ),
+        )
+
+    def compute_features(
+        self, records: list[ScanRecord], h5_file: h5py.File
+    ) -> dict[str, np.ndarray]:
+        """Compute cheap per-scan features from the just-written H5."""
+        n_scans = len(records)
+        n_voxels = np.zeros(n_scans, dtype=np.int64)
+        log_v = np.full(n_scans, np.nan, dtype=np.float32)
+        lat = np.empty(n_scans, dtype=object)
+        grade = np.full(n_scans, -1, dtype=np.int8)
+        age = np.full(n_scans, np.nan, dtype=np.float32)
+        sex = np.empty(n_scans, dtype=object)
+
+        spacing = np.prod(self.spacing_mm)
+        tumor_labels = tuple(k for k in _LABEL_MAP if k != 0)
+
+        segs = h5_file["segmentations"]
+        has_seg = h5_file["has_segmentation"][:]
+
+        for i, rec in enumerate(records):
+            meta = self._metadata_for(rec.patient_id)
+            grade[i] = int(meta["grade"])
+            age[i] = float(meta["age"])
+            sex[i] = str(meta["sex"])
+            if has_seg[i]:
+                seg = segs[i]
+                tumor = np.isin(seg, tumor_labels)
+                vox = int(tumor.sum())
+                n_voxels[i] = vox
+                if vox > 0:
+                    log_v[i] = float(np.log(vox * spacing / 1000.0))
+                lat[i] = laterality_from_mask(tumor)
+            else:
+                lat[i] = ""
+
+        return {
+            "n_voxels_tumor": n_voxels,
+            "log_volume_cm3": log_v,
+            "laterality": lat,
+            "grade": grade,
+            "age": age,
+            "sex": sex,
         }
 
     # ----- Discovery -----

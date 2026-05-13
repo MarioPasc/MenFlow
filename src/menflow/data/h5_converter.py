@@ -32,6 +32,11 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 
+from menflow.data.features import (
+    FeatureRegistry,
+    assert_features_valid,
+    write_features,
+)
 from menflow.data.h5_schema import SCHEMA_VERSION, H5Schema
 
 logger = logging.getLogger(__name__)
@@ -173,6 +178,44 @@ class H5Converter(abc.ABC):
         """
         return {}
 
+    # ----- Optional hook: per-cohort features attached at build time -----
+
+    def feature_registry(self) -> FeatureRegistry | None:  # noqa: F821
+        """Cohort-specific feature schema written under ``/features/``.
+
+        Subclasses override this to declare cheap, dataset-dependent features
+        (log-volume, laterality, growth velocity, ...) that
+        :meth:`compute_features` will materialise after the H5 body has been
+        written. The default returns ``None``, which leaves the optional
+        ``/features/`` group absent.
+        """
+        return None
+
+    def compute_features(
+        self, records: list[ScanRecord], h5_file: h5py.File
+    ) -> Mapping[str, np.ndarray]:
+        """Compute every feature declared by :meth:`feature_registry`.
+
+        Parameters
+        ----------
+        records
+            The full record list, in the same row order used by
+            :meth:`_write_h5`.
+        h5_file
+            The just-written H5 opened in read-write mode. Implementations may
+            read ``/segmentations`` / ``/images`` / ``/metadata/`` to derive
+            features without keeping the full cohort in memory.
+
+        Returns
+        -------
+        Mapping[str, np.ndarray]
+            Dict from feature name to array. Must satisfy the registry's
+            dtype and shape contract for every required feature.
+        """
+        raise NotImplementedError(
+            "feature_registry() returned a non-None value but compute_features() was not overridden"
+        )
+
     # ----- Driver -----
 
     def convert(
@@ -183,6 +226,7 @@ class H5Converter(abc.ABC):
         max_scans: int | None = None,
         compression: str = "gzip",
         compression_level: int = 4,
+        compute_features: bool = True,
     ) -> Path:
         """Discover, load, write, and validate a full cohort.
 
@@ -231,6 +275,18 @@ class H5Converter(abc.ABC):
             compression=compression,
             compression_level=compression_level,
         )
+
+        registry = self.feature_registry() if compute_features else None
+        if registry is not None:
+            with h5py.File(output_path, "r+") as f:
+                data = self.compute_features(records, f)
+                write_features(f, registry, data, overwrite=True)
+            assert_features_valid(output_path)
+            logger.info(
+                "Wrote %d features under /features/ for %s",
+                len(registry.features),
+                output_path,
+            )
 
         from menflow.data.h5_schema import (
             assert_h5_valid,  # local import avoids cycle in re-imports

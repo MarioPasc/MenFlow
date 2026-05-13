@@ -1,0 +1,30 @@
+# E1 analysis — MenGrowth on Picasso.
+#
+# Mirror of picasso_brats_men.yaml. Runs the same reconstruction-sufficiency
+# analysis (per-scan PSNR/SSIM/MS-SSIM + WT/TC masked variants + volume
+# stratification) on the MenGrowth recon. The orchestrator chains it after
+# decode via afterok dependency.
+
+source_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/MenGrowth_MenFlow.h5
+recon_h5: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/menflow/recon/mengrowth_maisi_recon.h5
+output_dir: /mnt/home/users/tic_163_uma/mpascual/execs/menflow/E1_mengrowth
+
+max_scans: null
+device: cpu
+n_bootstrap: 500
+seed: 0
+require_segmentation: true
+log_level: INFO
+stratification_volume: volume_wt_cm3
+
+slurm:
+  job_name: menflow_e1_analysis_mengrowth
+  partition: cal
+  constraint: cal
+  time: "0-01:00:00"
+  cpus_per_task: 8
+  mem: 32G
+  gres: ""
+  conda_env: menflow
+  repo_dir: /mnt/home/users/tic_163_uma/mpascual/fscratch/repos/MenFlow
+  logs_dir: /mnt/home/users/tic_163_uma/mpascual/execs/menflow/logs
