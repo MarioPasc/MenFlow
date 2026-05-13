@@ -58,6 +58,16 @@ dependencies = [
     #   • Picasso A100 inside an NGC Singularity image (torch already provided):
     #       pip install -e . --no-deps          # then install non-torch deps:
     #       pip install h5py monai>=1.3 ...     # everything else
+    #
+    #   • Picasso loginexa with V100-DGXS (CC 7.0 / Volta). PyTorch ≥ 2.5
+    #     dropped sm_70 from default cu12 wheels, so the default `pip install
+    #     torch` ships a wheel that raises
+    #         CUDA error: no kernel image is available for execution on the device
+    #     on these GPUs. Pin a Volta-compatible wheel:
+    #         pip install --index-url https://download.pytorch.org/whl/cu121 \
+    #             "torch==2.4.1" "torchvision==0.19.1"
+    #     (torch 2.4.x is the last release shipping sm_70 in CUDA-12 wheels;
+    #     cu118 wheels also work if the driver is older.)
     #     Or, inside an Apptainer recipe, simply add MenFlow as the last layer
     #     without touching the NGC torch install:
     #       %post
