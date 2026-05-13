@@ -1,0 +1,41 @@
+# E2.5 — full cohort, no decode. Produces the latent-space primary metrics
+# (ρ_lin + null baseline + Δρ) which §10 L3 of the spec calls the primary
+# diagnostic. Use when the GPU decode path is unavailable.
+
+unified_h5: /media/mpascual/MeningD2/MENINGIOMAS/MENGROWTH/050526/h5_format/MenGrowth_MenFlow.h5
+latents_h5: /media/mpascual/MeningD2/MAISI_VAEGAN_LATENTS/MENGROWTH/mengrowth_maisi_latents.h5
+maisi_checkpoint: /media/mpascual/Sandisk2TB/research/menflow/checkpoints/NV-Generate-MR/models/autoencoder_v2.pt
+
+e2_1_direction_npz:
+  t1c: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_1_recoverability/per_modality/t1c/direction.npz
+  t1n: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_1_recoverability/per_modality/t1n/direction.npz
+  t2f: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_1_recoverability/per_modality/t2f/direction.npz
+  t2w: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2_1_recoverability/per_modality/t2w/direction.npz
+
+modalities: [t1c, t1n, t2f, t2w]
+mask_label_set: [1, 2, 3]
+
+min_timepoints: 3
+min_log_volume_spread: 0.3
+min_log_volume_spread_relaxed: [0.2, 0.1]
+min_effective_cohort: 20
+
+beta_grid_size: 21
+anatomy_beta_grid: [0.0, 0.25, 0.5, 0.75, 1.0]
+use_segmenter_dice: false
+mask_dilation_voxels: 2
+
+n_null_triples: 500
+null_random_seed: 42
+
+n_bootstrap_resamples: 1000
+bootstrap_ci_alpha: 0.05
+bootstrap_seed: 0
+
+device: cpu
+decode_dtype: float32
+skip_decode: true
+
+output_dir: /media/mpascual/Sandisk2TB/research/menflow/experiments/E2/E2.5_ae_longitudinal/no_decode
+n_qualitative_panel_patients: 0
+log_level: INFO
